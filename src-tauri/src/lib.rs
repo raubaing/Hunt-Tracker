@@ -179,6 +179,8 @@ struct AppState {
     io: Mutex<()>,
     bindings: Mutex<Vec<(Shortcut, Action)>>,
     shortcut_error: Mutex<Option<String>>,
+    /// Dossier de données imposé (tests automatiques) ; sinon %APPDATA%
+    data_override: Option<PathBuf>,
 }
 
 // ---------- Fichiers ----------
@@ -210,7 +212,11 @@ fn is_stale(session: &Session, now: NaiveDateTime) -> bool {
 const EVT_ACTIVE: &str = "active-session-changed";
 
 fn data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let overridden = app.try_state::<AppState>().and_then(|st| st.data_override.clone());
+    let dir = match overridden {
+        Some(dir) => dir,
+        None => app.path().app_data_dir().map_err(|e| e.to_string())?,
+    };
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -704,14 +710,17 @@ fn restore_game(
     game: Game,
     index: usize,
 ) -> Result<Session, String> {
-    update_session(&app, &state, &session_id, |s| {
-        if s.games.iter().any(|g| g.id == game.id) {
-            return Err("Cette game existe déjà".into());
-        }
-        let i = index.min(s.games.len());
-        s.games.insert(i, game);
-        Ok(())
-    })
+    update_session(&app, &state, &session_id, |s| insert_game(s, game, index))
+}
+
+/// Insère une game à une position donnée (bornée), en refusant un identifiant déjà présent
+fn insert_game(s: &mut Session, game: Game, index: usize) -> Result<(), String> {
+    if s.games.iter().any(|g| g.id == game.id) {
+        return Err("Cette game existe déjà".into());
+    }
+    let i = index.min(s.games.len());
+    s.games.insert(i, game);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1028,3 +1037,5 @@ pub fn run() {
         .expect("erreur au lancement de Hunt Tracker");
 }
 
+#[cfg(test)]
+mod tests;

@@ -36,6 +36,14 @@ npm run tauri dev      # lance l'appli en mode dev
 npm run tauri build    # produit l'installeur dans src-tauri/target/release/bundle/nsis/
 ```
 
+## Tests
+
+- `cargo test --manifest-path src-tauri/Cargo.toml` : tests de la logique de données (compteurs,
+  sessions, corrections, coéquipiers, export CSV, compatibilité des anciens fichiers), dans un dossier
+  temporaire (les vraies données ne sont jamais touchées). Nécessite `npm run build` au préalable.
+- `npm run check` : vérification des types de l'interface.
+- Le workflow `checks.yml` lance les deux à chaque push sur GitHub (onglet Actions, « Vérifications »).
+
 ## Compiler via GitHub (sans rien installer)
 
 - Chaque push sur `main` compile l'appli : onglet **Actions** > dernier run > **Artifacts** >

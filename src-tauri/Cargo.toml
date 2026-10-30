@@ -19,6 +19,10 @@ tauri-plugin-global-shortcut = "2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 tauri-plugin-dialog = "2"
 
+[dev-dependencies]
+# Runtime simulé de Tauri pour les tests automatiques (cargo test)
+tauri = { version = "2", features = ["tray-icon", "test"] }
+
 [profile.release]
 codegen-units = 1
 lto = true
