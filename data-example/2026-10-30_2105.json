@@ -1,0 +1,21 @@
+{
+  "id": "2026-10-30_2105",
+  "startedAt": "2026-10-30T21:05:00",
+  "endedAt": "2026-10-30T23:40:00",
+  "note": "Trio avec Max et Léo",
+  "games": [
+    {
+      "id": 1,
+      "kills": 3,
+      "deaths": 1,
+      "assists": 2,
+      "mode": "bounty",
+      "teamSize": 3,
+      "map": "Stillwater Bayou",
+      "extracted": true,
+      "bounty": true,
+      "mmrStars": 4,
+      "timestamp": "2026-10-30T21:32:00"
+    }
+  ]
+}

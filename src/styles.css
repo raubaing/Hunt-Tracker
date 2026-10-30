@@ -1,0 +1,20 @@
+:root {
+  --bg: #16130f;
+  --panel: #221d17;
+  --border: #3a3128;
+  --text: #e8dcc8;
+  --muted: #9c8f7a;
+  --accent: #c8102e;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); }
+/* Le widget a un fond transparent : seule la carte est visible */
+body.widget { background: transparent; overflow: hidden; }
+button {
+  font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
