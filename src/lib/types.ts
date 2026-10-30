@@ -67,4 +67,4 @@ export interface Settings {
 }
 
 /** Onglets du panneau déplié */
-export type Tab = "sessions" | "options";
+export type Tab = "sessions" | "stats" | "options";

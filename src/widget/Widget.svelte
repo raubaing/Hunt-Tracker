@@ -161,6 +161,7 @@
   let offset = $state({ x: 0, y: 0 }); // position de la barre dans la fenêtre agrandie
   let busy = false;
   let tab = $state<Tab>("sessions");
+  const TABS: Tab[] = ["sessions", "stats", "options"];
 
   const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
@@ -347,8 +348,9 @@
     {#if panelMounted}
       <nav class="tabs" class:visible={expanded} data-tauri-drag-region>
         <button class:active={tab === "sessions"} onclick={() => (tab = "sessions")}>Sessions</button>
+        <button class:active={tab === "stats"} onclick={() => (tab = "stats")}>Stats</button>
         <button class:active={tab === "options"} onclick={() => (tab = "options")}>Options</button>
-        <span class="underline" class:right={tab === "options"}></span>
+        <span class="underline" style:transform="translateX({TABS.indexOf(tab) * 100}px)"></span>
       </nav>
     {/if}
   </div>
@@ -451,7 +453,6 @@
     background: var(--accent);
     transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .underline.right { transform: translateX(100px); }
 
   /* ---------- Tiroir des infos ---------- */
   .drawer {

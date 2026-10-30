@@ -25,7 +25,7 @@
     onActiveSessionChanged,
   } from "../lib/storage";
   import { formatStart } from "../lib/sessions";
-  import { sessionTotals, kda, formatKda } from "../lib/stats";
+  import { sessionTotals, kda, formatKda, sessionDuration, formatDuration } from "../lib/stats";
 
   let sessions = $state<Session[]>([]);
   let activeId = $state<string | null>(null);
@@ -209,7 +209,12 @@
       <header>
         <div>
           <h1>{selected.name}</h1>
-          <p class="sub">Commencée le {formatStart(selected.startedAt)}</p>
+          <p class="sub">
+            Commencée le {formatStart(selected.startedAt)}
+            {#if sessionDuration(selected)}
+              · durée ≈ {formatDuration(sessionDuration(selected)!)}
+            {/if}
+          </p>
         </div>
         <div class="actions">
           {#if isActive}

@@ -4,6 +4,7 @@
   import { cubicOut } from "svelte/easing";
   import SessionsTab from "./SessionsTab.svelte";
   import OptionsTab from "./OptionsTab.svelte";
+  import StatsTab from "./StatsTab.svelte";
   import { dur } from "../lib/motion";
   import type { Tab } from "../lib/types";
 
@@ -15,6 +16,8 @@
     <div class="pane" in:fly={{ y: 10, duration: dur(220), easing: cubicOut }}>
       {#if tab === "sessions"}
         <SessionsTab />
+      {:else if tab === "stats"}
+        <StatsTab />
       {:else}
         <OptionsTab />
       {/if}

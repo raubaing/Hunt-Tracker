@@ -2,7 +2,8 @@
 
 Petit widget flottant pour suivre ses sessions de **Hunt: Showdown 1896** (kills, morts, assists, KDA).
 
-> Statut : squelette du projet, aucune fonctionnalité implémentée pour l'instant.
+> Fonctionnalités : sessions, compteurs K / A / D (boutons + raccourcis globaux), infos Hunt par game,
+> correction des games, notes, statistiques et graphiques, widget dépliable et animé.
 
 ## Stack
 
@@ -41,11 +42,9 @@ npm run tauri build    # produit l'installeur dans src-tauri/target/release/bund
   `HuntTracker-windows` (contient l'installeur `*-setup.exe` et l'exe portable `hunt-tracker.exe`).
 - Un tag `v0.1.0` crée en plus une **Release** (brouillon) avec l'installeur, à publier pour la partager.
 
-## Feuille de route
+## Idées pour la suite
 
-1. Widget : compteurs K / D / A, validation d'une game
-2. Sauvegarde JSON + calcul du KDA
-3. Raccourcis globaux (F9 kill, F10 mort, F11 assist, F12 valider)
-4. Fenêtre principale : tableau de session + historique
-5. Systray, verrouillage, opacité, mémorisation de la position
-6. V2 : graphiques, filtres, champs propres à Hunt (map, mode, extraction, MMR…)
+- Icône dans la barre des tâches système (systray), verrouillage et opacité du widget
+- Lancement au démarrage de Windows
+- Mises à jour automatiques (plugin updater de Tauri)
+- Export / import de sessions (JSON, CSV)
