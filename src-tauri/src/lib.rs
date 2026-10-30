@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 // ---------- Modèle de données (miroir de src/lib/types.ts) ----------
@@ -493,15 +493,6 @@ pub fn run() {
             set_shortcuts,
             pause_shortcuts
         ])
-        // Fermer la fenêtre principale la cache seulement : le widget reste actif
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Hunt Tracker");
 }

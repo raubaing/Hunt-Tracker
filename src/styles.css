@@ -18,3 +18,23 @@ button {
   border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
 }
 button:hover { border-color: var(--accent); }
+
+/* ---------- Animations ---------- */
+button {
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease, filter 120ms ease;
+}
+button:active:not(:disabled) { transform: scale(0.95); }
+
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 16, 46, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.35); }
+}
+
+/* Respecte le réglage Windows « Afficher les animations » */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

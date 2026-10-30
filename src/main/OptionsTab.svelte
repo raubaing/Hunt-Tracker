@@ -1,6 +1,8 @@
 <script lang="ts">
   // Onglet Options : configuration des raccourcis clavier globaux
   import { onMount } from "svelte";
+  import { fade } from "svelte/transition";
+  import { dur } from "../lib/motion";
   import type { Shortcuts } from "../lib/types";
   import { getSettings, setShortcuts, pauseShortcuts } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
@@ -93,7 +95,7 @@
   </p>
 
   {#if error}
-    <p class="error">{error}</p>
+    <p class="error" transition:fade={{ duration: dur(200) }}>{error}</p>
   {/if}
 
   <table>
@@ -123,7 +125,7 @@
 
   <div class="footer">
     <button onclick={reset}>Rétablir les valeurs par défaut</button>
-    {#if saved}<span class="saved">✓ Enregistré</span>{/if}
+    {#if saved}<span class="saved" transition:fade={{ duration: dur(200) }}>✓ Enregistré</span>{/if}
   </div>
 
   <p class="help">
@@ -145,7 +147,7 @@
     font-family: Consolas, monospace; background: var(--bg);
   }
   .key.none { color: var(--muted); font-style: italic; }
-  .key.capturing { border-color: var(--accent); color: var(--accent); }
+  .key.capturing { border-color: var(--accent); color: var(--accent); animation: pulse-border 1.2s ease-in-out infinite; }
   .link { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; }
   .link:hover { color: var(--text); }
   .footer { display: flex; align-items: center; gap: 12px; }

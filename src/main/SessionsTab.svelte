@@ -1,6 +1,11 @@
 <script lang="ts">
   // Onglet Sessions : liste à gauche, détail de la session sélectionnée à droite
   import { onMount } from "svelte";
+  import { flip } from "svelte/animate";
+  import { fly, slide } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
+  import AnimatedNumber from "../lib/AnimatedNumber.svelte";
+  import { dur } from "../lib/motion";
   import type { Session } from "../lib/types";
   import {
     listSessions,
@@ -84,7 +89,11 @@
     {:else}
       <ul>
         {#each sessions as s (s.id)}
-          <li>
+          <li
+            animate:flip={{ duration: dur(250) }}
+            in:slide={{ duration: dur(220), easing: cubicOut }}
+            out:slide={{ duration: dur(180) }}
+          >
             <button class="item" class:selected={s.id === selectedId} onclick={() => (selectedId = s.id)}>
               <span class="name">{s.name}</span>
               <span class="meta">
@@ -104,6 +113,8 @@
     {/if}
 
     {#if selected && selectedTotals}
+      {#key selected.id}
+      <div in:fly={{ x: 16, duration: dur(220), easing: cubicOut }}>
       <header>
         <div>
           <h1>{selected.name}</h1>
@@ -124,11 +135,11 @@
       </header>
 
       <div class="stats">
-        <div><span>Games</span><strong>{selectedTotals.games}</strong></div>
-        <div><span>Kills</span><strong>{selectedTotals.kills}</strong></div>
-        <div><span>Assists</span><strong>{selectedTotals.assists}</strong></div>
-        <div><span>Morts</span><strong>{selectedTotals.deaths}</strong></div>
-        <div><span>KDA</span><strong>{formatKda(kda(selectedTotals))}</strong></div>
+        <div><span>Games</span><strong><AnimatedNumber value={selectedTotals.games} /></strong></div>
+        <div><span>Kills</span><strong><AnimatedNumber value={selectedTotals.kills} /></strong></div>
+        <div><span>Assists</span><strong><AnimatedNumber value={selectedTotals.assists} /></strong></div>
+        <div><span>Morts</span><strong><AnimatedNumber value={selectedTotals.deaths} /></strong></div>
+        <div><span>KDA</span><strong><AnimatedNumber value={kda(selectedTotals)} decimals={2} /></strong></div>
       </div>
 
       {#if selected.games.length === 0 && !isActive}
@@ -140,7 +151,7 @@
           </thead>
           <tbody>
             {#each selected.games as g (g.id)}
-              <tr>
+              <tr in:fly={{ y: -8, duration: dur(260), easing: cubicOut }}>
                 <td>{g.id}</td><td>{g.kills}</td><td>{g.assists}</td><td>{g.deaths}</td>
                 <td>{formatKda(kda(g))}</td>
               </tr>
@@ -158,6 +169,8 @@
           </tbody>
         </table>
       {/if}
+      </div>
+      {/key}
     {:else}
       <div class="placeholder">
         <p>Crée une session pour commencer à suivre tes games.</p>
@@ -204,6 +217,14 @@
   .placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
   .primary { background: var(--accent); border-color: var(--accent); padding: 8px 14px; font-weight: 600; }
   .primary:hover { filter: brightness(1.1); }
-  .danger { background: var(--accent); border-color: var(--accent); }
+  .danger { background: var(--accent); border-color: var(--accent); animation: pulse-border 1s ease-in-out infinite; }
+  .stats div { transition: border-color 200ms ease; }
+  .stats div:hover { border-color: var(--muted); }
+  .error { animation: shake 300ms ease; }
+  @keyframes shake {
+    0%, 100% { transform: none; }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
   .error { background: rgba(200, 16, 46, 0.15); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 4px; }
 </style>

@@ -15,10 +15,10 @@ Petit widget flottant pour suivre ses sessions de **Hunt: Showdown 1896** (kills
 ```
 src/
   lib/          types.ts (modèle), stats.ts (KDA), storage.ts (JSON)
-  widget/       widget flottant : sans bordure, toujours au premier plan, déplaçable
-  main/         fenêtre principale : tableau de session, historique
+  widget/       fenêtre unique : barre du widget (compteurs) + panneau dépliable (⤢)
+  main/         contenu du panneau : onglets Sessions et Options
 src-tauri/
-  tauri.conf.json         2 fenêtres : "widget" et "main" (cachée au démarrage)
+  tauri.conf.json         une fenêtre "widget" : sans bordure, transparente, au premier plan
   capabilities/           permissions des fenêtres
   src/lib.rs              point d'entrée Rust (plugins à venir)
 data-example/             exemple de fichier de session

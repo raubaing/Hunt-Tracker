@@ -48,3 +48,6 @@ export interface Settings {
   shortcuts: Shortcuts;
   shortcutError: string | null;
 }
+
+/** Onglets du panneau déplié */
+export type Tab = "sessions" | "options";
