@@ -1,7 +1,7 @@
 // Accès aux données (géré côté Rust, dans %APPDATA%\com.robinnaud.hunttracker)
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { Session, Settings, Shortcuts, Stat } from "./types";
+import type { GameDetails, Preferences, Session, Settings, Shortcuts, Stat } from "./types";
 
 // Sessions
 export const listSessions = () => invoke<Session[]>("list_sessions");
@@ -23,10 +23,14 @@ export const updateGame = (sessionId: string, gameId: number, c: { kills: number
   invoke<Session>("update_game", { sessionId, gameId, ...c });
 export const deleteGame = (sessionId: string, gameId: number) =>
   invoke<Session>("delete_game", { sessionId, gameId });
+/** Infos Hunt d'une game (remplace les valeurs existantes) */
+export const setGameDetails = (sessionId: string, gameId: number, details: GameDetails) =>
+  invoke<Session>("set_game_details", { sessionId, gameId, details });
 
 // Options
 export const getSettings = () => invoke<Settings>("get_settings");
 export const setShortcuts = (shortcuts: Shortcuts) => invoke<void>("set_shortcuts", { shortcuts });
+export const setPreferences = (preferences: Preferences) => invoke<void>("set_preferences", { preferences });
 /** Mémorise la position de la barre du widget (pixels physiques) */
 export const saveWidgetPosition = (x: number, y: number) =>
   invoke<void>("save_widget_position", { x: Math.round(x), y: Math.round(y) });
@@ -40,3 +44,7 @@ export const onSessionsChanged = (cb: () => void): Promise<UnlistenFn> =>
 /** La session en cours a changé (ou son contenu). */
 export const onActiveSessionChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen("active-session-changed", () => cb());
+
+/** Les préférences ont changé */
+export const onPreferencesChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen("preferences-changed", () => cb());

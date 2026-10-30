@@ -6,7 +6,9 @@
   import { cubicOut } from "svelte/easing";
   import AnimatedNumber from "../lib/AnimatedNumber.svelte";
   import { dur } from "../lib/motion";
-  import type { Game, Session } from "../lib/types";
+  import type { Game, GameDetails, Session } from "../lib/types";
+  import { detailsOf, mapShort, teamLabel } from "../lib/hunt";
+  import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
   import {
     listSessions,
     createSession,
@@ -17,6 +19,7 @@
     unvalidateGame,
     updateGame,
     deleteGame,
+    setGameDetails,
     onSessionsChanged,
     onActiveSessionChanged,
   } from "../lib/storage";
@@ -30,7 +33,7 @@
   let error = $state<string | null>(null);
 
   // Correction d'une game validée
-  let editing = $state<{ id: number; kills: number; deaths: number; assists: number } | null>(null);
+  let editing = $state<{ id: number; kills: number; deaths: number; assists: number; details: GameDetails } | null>(null);
   let confirmGameId = $state<number | null>(null);
 
   const selected = $derived(sessions.find((s) => s.id === selectedId) ?? null);
@@ -81,7 +84,7 @@
     });
 
   function startEdit(g: Game) {
-    editing = { id: g.id, kills: g.kills, deaths: g.deaths, assists: g.assists };
+    editing = { id: g.id, kills: g.kills, deaths: g.deaths, assists: g.assists, details: detailsOf(g) };
   }
 
   const clampCount = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(999, Math.round(n))) : 0);
@@ -95,6 +98,7 @@
         deaths: clampCount(e.deaths),
         assists: clampCount(e.assists),
       });
+      await setGameDetails(selected.id, e.id, e.details);
       editing = null;
     });
 
@@ -194,7 +198,7 @@
       {:else}
         <table>
           <thead>
-            <tr><th>#</th><th>K</th><th>A</th><th>D</th><th>KDA</th><th></th></tr>
+            <tr><th>#</th><th>K</th><th>A</th><th>D</th><th>KDA</th><th>Infos</th><th></th></tr>
           </thead>
           <tbody>
             {#each selected.games as g, i (g.id)}
@@ -205,6 +209,9 @@
                   <td><input type="number" min="0" bind:value={editing.assists} onkeydown={onEditKeydown} aria-label="Assists" /></td>
                   <td><input type="number" min="0" bind:value={editing.deaths} onkeydown={onEditKeydown} aria-label="Morts" /></td>
                   <td>{formatKda(kda({ kills: clampCount(editing.kills), deaths: clampCount(editing.deaths), assists: clampCount(editing.assists) }))}</td>
+                  <td class="infos-edit">
+                    <GameDetailsEditor details={editing.details} onchange={(d) => editing && (editing.details = d)} />
+                  </td>
                   <td class="row-actions visible">
                     <button class="primary small" onclick={saveEdit}>Enregistrer</button>
                     <button class="small" onclick={() => (editing = null)}>Annuler</button>
@@ -212,6 +219,17 @@
                 {:else}
                   <td>{g.kills}</td><td>{g.assists}</td><td>{g.deaths}</td>
                   <td>{formatKda(kda(g))}</td>
+                  <td>
+                    <div class="infos">
+                      {#if g.teamSize}<span class="chip">{teamLabel(g.teamSize)}</span>{/if}
+                      {#if g.map}<span class="chip" title={g.map}>{mapShort(g.map)}</span>{/if}
+                      {#if g.extracted === true}<span class="chip good">Extrait</span>{/if}
+                      {#if g.extracted === false}<span class="chip bad">Pas extrait</span>{/if}
+                      {#if g.bounty === true}<span class="chip good">Bounty</span>{/if}
+                      {#if g.bounty === false}<span class="chip">Sans bounty</span>{/if}
+                      {#if g.mmrStars}<span class="chip stars" title="{g.mmrStars} étoiles MMR">★{g.mmrStars}</span>{/if}
+                    </div>
+                  </td>
                   <td class="row-actions" class:visible={confirmGameId === g.id}>
                     {#if confirmGameId === g.id}
                       <button class="danger small" onclick={() => removeGame(g.id)}>Confirmer la suppression</button>
@@ -228,20 +246,24 @@
                 <td>En cours</td>
                 <td>{selected.current.kills}</td><td>{selected.current.assists}</td><td>{selected.current.deaths}</td>
                 <td>{formatKda(kda(selected.current))}</td>
-                <td class="row-actions visible">
-                  <button class="small" onclick={() => run(validateGame)}>Valider la game</button>
-                  {#if selected.games.length > 0}
-                    <button
-                      class="small"
-                      title="La dernière game validée redevient la game en cours (Ctrl + raccourci de validation)"
-                      onclick={() => run(unvalidateGame)}>↶ Rouvrir la dernière</button
-                    >
-                  {/if}
-                </td>
+                <td></td>
+                <td></td>
               </tr>
             {/if}
           </tbody>
         </table>
+        {#if isActive}
+          <div class="current-actions">
+            <button class="small" onclick={() => run(validateGame)}>✓ Valider la game en cours</button>
+            {#if selected.games.length > 0}
+              <button
+                class="small"
+                title="La dernière game validée redevient la game en cours (Ctrl + raccourci de validation)"
+                onclick={() => run(unvalidateGame)}>↶ Rouvrir la dernière game</button
+              >
+            {/if}
+          </div>
+        {/if}
       {/if}
       </div>
       {/key}
@@ -287,11 +309,25 @@
   th { color: var(--muted); font-weight: 600; }
   tr.current td { color: var(--accent); font-weight: 600; }
   td:first-child { white-space: nowrap; }
+  /* Colonnes chiffrées serrées, la colonne Infos prend la place restante */
+  table th, table td { width: 1%; white-space: nowrap; padding-right: 16px; }
+  table th:nth-child(6), table td:nth-child(6) { width: auto; white-space: normal; }
+  .infos { display: flex; flex-wrap: wrap; gap: 4px; }
+  .infos-edit { min-width: 300px; }
+  .chip {
+    font-size: 11px; padding: 1px 6px; border-radius: 10px;
+    border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
+  }
+  .chip.good { color: #8fc98f; border-color: #3d5a3d; }
+  .chip.bad { color: #d98a8a; border-color: #5a3434; }
+  .chip.stars { color: #e0b54a; border-color: #5a4a26; }
   .row-actions { text-align: right; white-space: nowrap; width: 1%; }
   .row-actions button { margin-left: 6px; font-weight: 400; color: var(--text); }
   .row-actions:not(.visible) button { opacity: 0; transition: opacity 120ms ease; }
   tr.game:hover .row-actions button, .row-actions button:focus-visible { opacity: 1; }
   .row-actions .small { padding: 3px 10px; font-size: 13px; }
+  .current-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .current-actions .small { padding: 4px 12px; font-size: 13px; }
   .icon { padding: 2px 8px; font-size: 13px; }
   td input {
     width: 48px; padding: 2px 4px; font: inherit; color: var(--text);

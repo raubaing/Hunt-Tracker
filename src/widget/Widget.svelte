@@ -5,22 +5,29 @@
   import { onMount, tick } from "svelte";
   import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
   import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
-  import type { Session, Stat, Tab } from "../lib/types";
+  import type { GameDetails, Session, Stat, Tab } from "../lib/types";
   import {
     addStat,
     createSession,
     getActiveSession,
+    getSettings,
     onActiveSessionChanged,
+    onPreferencesChanged,
     saveWidgetPosition,
+    setGameDetails,
     validateGame,
   } from "../lib/storage";
+  import { detailsOf } from "../lib/hunt";
+  import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
   import { sessionTotals, kda } from "../lib/stats";
   import { dur, sleep } from "../lib/motion";
   import AnimatedNumber from "../lib/AnimatedNumber.svelte";
   import Panel from "../main/Panel.svelte";
 
   const BAR = { w: 340, h: 80 };
+  const DRAWER_H = 118; // tiroir des infos de game, sous la barre
   const PANEL = { w: 920, h: 640 };
+  const DRAWER_AUTOCLOSE_MS = 25000;
   const ANIM_MS = 320;
 
   const win = getCurrentWindow();
@@ -52,19 +59,99 @@
     }
   }
 
-  // Petit flash de la barre quand une game est validée
+  let showDetailsPrompt = $state(true);
+  async function loadPreferences() {
+    try {
+      showDetailsPrompt = (await getSettings()).preferences.showDetailsPrompt;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Quand une game est validée (bouton ou raccourci) : flash de la barre + tiroir des infos.
+  // Quand elle est rouverte : on referme le tiroir.
   let flash = $state(false);
   const validate = () => safe(validateGame);
-  let lastGameCount = -1;
+  let last = { sessionId: "", games: -1 };
   $effect(() => {
+    const id = active?.id ?? "";
     const n = active?.games.length ?? 0;
-    if (lastGameCount >= 0 && n > lastGameCount) {
-      flash = false;
-      requestAnimationFrame(() => (flash = true));
-      setTimeout(() => (flash = false), 700);
+    if (id === last.sessionId && last.games >= 0) {
+      if (n > last.games) {
+        flash = false;
+        requestAnimationFrame(() => (flash = true));
+        setTimeout(() => (flash = false), 700);
+        const game = active?.games[n - 1];
+        if (game && showDetailsPrompt && !expanded) openDrawer(game.id);
+      } else if (n < last.games) {
+        closeDrawer();
+      }
+    } else if (drawerOpen) {
+      closeDrawer();
     }
-    lastGameCount = n;
+    last = { sessionId: id, games: n };
   });
+
+  // La game suivante commence (un compteur bouge) : le tiroir se referme
+  $effect(() => {
+    const c = active?.current;
+    if (c && c.kills + c.deaths + c.assists > 0 && drawerOpen) closeDrawer();
+  });
+
+  // ---------- Tiroir des infos de la dernière game ----------
+  let drawerOpen = $state(false);
+  let drawerGameId = $state<number | null>(null);
+  let drawerTimer: ReturnType<typeof setTimeout> | undefined;
+  let resizing = false;
+  const drawerGame = $derived(active?.games.find((g) => g.id === drawerGameId) ?? null);
+
+  function armDrawerTimer() {
+    clearTimeout(drawerTimer);
+    drawerTimer = setTimeout(closeDrawer, DRAWER_AUTOCLOSE_MS);
+  }
+
+  async function openDrawer(gameId: number) {
+    drawerGameId = gameId;
+    armDrawerTimer();
+    if (drawerOpen || resizing || busy || expanded) return;
+    resizing = true;
+    try {
+      animate = false;
+      await win.setSize(new LogicalSize(BAR.w, BAR.h + DRAWER_H));
+      await tick();
+      await frame();
+      animate = true;
+      drawerOpen = true;
+      await sleep(dur(ANIM_MS));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      resizing = false;
+    }
+  }
+
+  async function closeDrawer() {
+    clearTimeout(drawerTimer);
+    if (!drawerOpen || resizing) return;
+    resizing = true;
+    try {
+      animate = true;
+      drawerOpen = false;
+      await sleep(dur(ANIM_MS));
+      if (!expanded && !busy) await win.setSize(new LogicalSize(BAR.w, BAR.h));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      resizing = false;
+    }
+  }
+
+  async function saveDrawerDetails(d: GameDetails) {
+    if (!active || drawerGameId === null) return;
+    armDrawerTimer();
+    const sessionId = active.id;
+    await safe(() => setGameDetails(sessionId, drawerGameId!, d));
+  }
 
   // ---------- Pliage / dépliage ----------
   let expanded = $state(false); // état visuel de la carte
@@ -79,6 +166,9 @@
   async function expand() {
     if (busy || expanded) return;
     busy = true;
+    // Le tiroir disparaît : ses infos restent modifiables dans le panneau
+    clearTimeout(drawerTimer);
+    drawerOpen = false;
     try {
       const sf = await win.scaleFactor();
       const pos = (await win.outerPosition()).toLogical(sf);
@@ -155,6 +245,10 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && drawerOpen && !expanded) {
+      closeDrawer();
+      return;
+    }
     if (e.key !== "Escape" || !expanded) return;
     // Laisse d'abord la main aux champs qui utilisent Échap (saisie d'un raccourci, édition d'une game)
     setTimeout(() => {
@@ -184,9 +278,15 @@
 
   onMount(() => {
     refresh();
-    const offs = [onActiveSessionChanged(refresh), win.onMoved(({ payload }) => onMoved(payload))];
+    loadPreferences();
+    const offs = [
+      onActiveSessionChanged(refresh),
+      onPreferencesChanged(loadPreferences),
+      win.onMoved(({ payload }) => onMoved(payload)),
+    ];
     return () => {
       clearTimeout(saveTimer);
+      clearTimeout(drawerTimer);
       offs.forEach((p) => p.then((f) => f()));
     };
   });
@@ -201,7 +301,7 @@
   style:left="{expanded ? 0 : offset.x}px"
   style:top="{expanded ? 0 : offset.y}px"
   style:width="{expanded ? PANEL.w : BAR.w}px"
-  style:height="{expanded ? PANEL.h : BAR.h}px"
+  style:height="{expanded ? PANEL.h : BAR.h + (drawerOpen ? DRAWER_H : 0)}px"
   style:--anim="{dur(ANIM_MS)}ms"
 >
   <div class="header">
@@ -250,6 +350,16 @@
       </nav>
     {/if}
   </div>
+
+  {#if !panelMounted && drawerGame}
+    <div class="drawer" class:visible={drawerOpen}>
+      <div class="drawer-head">
+        <span>Game {active?.games.indexOf(drawerGame)! + 1} — infos <em>(facultatif)</em></span>
+        <button class="ok" title="Fermer (Échap)" onclick={closeDrawer}>OK</button>
+      </div>
+      <GameDetailsEditor details={detailsOf(drawerGame)} onchange={saveDrawerDetails} />
+    </div>
+  {/if}
 
   {#if panelMounted}
     <div class="panel" class:visible={expanded}>
@@ -340,6 +450,19 @@
     transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .underline.right { transform: translateX(100px); }
+
+  /* ---------- Tiroir des infos ---------- */
+  .drawer {
+    height: 118px; flex-shrink: 0; box-sizing: border-box;
+    padding: 6px 10px 8px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 5px;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity 180ms ease, transform 240ms ease;
+  }
+  .drawer.visible { opacity: 1; transform: none; transition-delay: 100ms; }
+  .drawer-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; }
+  .drawer-head em { color: var(--muted); font-weight: 400; font-style: normal; }
+  .ok { padding: 0 10px; font-size: 12px; }
 
   /* ---------- Panneau ---------- */
   .panel {

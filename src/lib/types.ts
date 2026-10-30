@@ -44,8 +44,23 @@ export interface Shortcuts {
   validate: string;
 }
 
+/** Infos Hunt d'une game, renseignées après la validation (toutes facultatives) */
+export interface GameDetails {
+  teamSize?: TeamSize | null;
+  map?: string | null;
+  extracted?: boolean | null;
+  bounty?: boolean | null;
+  mmrStars?: number | null;
+}
+
+export interface Preferences {
+  /** Proposer les infos de la game juste après la validation */
+  showDetailsPrompt: boolean;
+}
+
 export interface Settings {
   shortcuts: Shortcuts;
+  preferences: Preferences;
   shortcutError: string | null;
 }
 

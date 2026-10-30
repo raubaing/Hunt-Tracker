@@ -81,6 +81,36 @@ struct WidgetPosition {
     y: i32,
 }
 
+/// Préférences diverses
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Preferences {
+    /// Proposer les infos de la game (extraction, map…) juste après la validation
+    show_details_prompt: bool,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self { show_details_prompt: true }
+    }
+}
+
+/// Infos Hunt d'une game, renseignées après la validation
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GameDetails {
+    #[serde(default)]
+    team_size: Option<u8>,
+    #[serde(default)]
+    map: Option<String>,
+    #[serde(default)]
+    extracted: Option<bool>,
+    #[serde(default)]
+    bounty: Option<bool>,
+    #[serde(default)]
+    mmr_stars: Option<u8>,
+}
+
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Config {
@@ -90,6 +120,8 @@ struct Config {
     shortcuts: Shortcuts,
     #[serde(default)]
     widget_position: Option<WidgetPosition>,
+    #[serde(default)]
+    preferences: Preferences,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -113,6 +145,7 @@ enum Action {
 #[serde(rename_all = "camelCase")]
 struct Settings {
     shortcuts: Shortcuts,
+    preferences: Preferences,
     /// Erreur d'enregistrement des raccourcis (touche déjà prise par une autre appli…)
     shortcut_error: Option<String>,
 }
@@ -290,17 +323,19 @@ fn validate_game_inner<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resu
     update_active(app, state, |s| {
         let id = s.games.iter().map(|g| g.id).max().unwrap_or(0) + 1;
         let c = std::mem::take(&mut s.current);
+        // Le format (solo/duo/trio) et les étoiles changent rarement : on reprend ceux de la game précédente
+        let previous = s.games.last();
         s.games.push(Game {
             id,
             kills: c.kills,
             deaths: c.deaths,
             assists: c.assists,
             mode: None,
-            team_size: None,
+            team_size: previous.and_then(|g| g.team_size),
             map: None,
             extracted: None,
             bounty: None,
-            mmr_stars: None,
+            mmr_stars: previous.and_then(|g| g.mmr_stars),
             timestamp: Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
         });
     })
@@ -517,6 +552,49 @@ fn update_game(
     })
 }
 
+/// Renseigne les infos Hunt d'une game (remplace les valeurs existantes)
+#[tauri::command]
+fn set_game_details(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    game_id: u32,
+    details: GameDetails,
+) -> Result<Session, String> {
+    if details.team_size.is_some_and(|t| !(1..=3).contains(&t)) {
+        return Err("Format invalide (1 à 3 joueurs)".into());
+    }
+    if details.mmr_stars.is_some_and(|t| !(1..=6).contains(&t)) {
+        return Err("Étoiles invalides (1 à 6)".into());
+    }
+    if details.map.as_ref().is_some_and(|m| m.len() > 60) {
+        return Err("Nom de map trop long".into());
+    }
+    update_session(&app, &state, &session_id, |s| {
+        let game = s
+            .games
+            .iter_mut()
+            .find(|g| g.id == game_id)
+            .ok_or_else(|| format!("Game introuvable : {game_id}"))?;
+        game.team_size = details.team_size;
+        game.map = details.map.filter(|m| !m.trim().is_empty());
+        game.extracted = details.extracted;
+        game.bounty = details.bounty;
+        game.mmr_stars = details.mmr_stars;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn set_preferences(app: AppHandle, state: State<'_, AppState>, preferences: Preferences) -> Result<(), String> {
+    let _guard = state.io.lock().map_err(|e| e.to_string())?;
+    let mut config = read_config(&app);
+    config.preferences = preferences;
+    write_config(&app, &config)?;
+    let _ = app.emit("preferences-changed", ());
+    Ok(())
+}
+
 #[tauri::command]
 fn delete_game(app: AppHandle, state: State<'_, AppState>, session_id: String, game_id: u32) -> Result<Session, String> {
     update_session(&app, &state, &session_id, |s| {
@@ -529,6 +607,7 @@ fn delete_game(app: AppHandle, state: State<'_, AppState>, session_id: String, g
 fn get_settings(app: AppHandle, state: State<'_, AppState>) -> Settings {
     Settings {
         shortcuts: read_config(&app).shortcuts,
+        preferences: read_config(&app).preferences,
         shortcut_error: state.shortcut_error.lock().ok().and_then(|e| e.clone()),
     }
 }
@@ -626,6 +705,8 @@ pub fn run() {
             unvalidate_game,
             update_game,
             delete_game,
+            set_game_details,
+            set_preferences,
             get_settings,
             set_shortcuts,
             pause_shortcuts,

@@ -3,8 +3,8 @@
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { dur } from "../lib/motion";
-  import type { Shortcuts } from "../lib/types";
-  import { getSettings, setShortcuts, pauseShortcuts } from "../lib/storage";
+  import type { Preferences, Shortcuts } from "../lib/types";
+  import { getSettings, setShortcuts, pauseShortcuts, setPreferences } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
 
   const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11" };
@@ -24,6 +24,7 @@
   }
 
   let shortcuts = $state<Shortcuts>({ ...DEFAULTS });
+  let preferences = $state<Preferences>({ showDetailsPrompt: true });
   let capturing = $state<keyof Shortcuts | null>(null);
   let error = $state<string | null>(null);
   let saved = $state(false);
@@ -32,6 +33,7 @@
     try {
       const settings = await getSettings();
       shortcuts = settings.shortcuts;
+      preferences = settings.preferences;
       error = settings.shortcutError;
     } catch (e) {
       error = String(e);
@@ -77,6 +79,18 @@
     const key = capturing;
     capturing = null;
     await save({ ...shortcuts, [key]: accel });
+  }
+
+  async function savePreferences(next: Preferences) {
+    error = null;
+    try {
+      await setPreferences(next);
+      preferences = next;
+      saved = true;
+      setTimeout(() => (saved = false), 2000);
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   const clear = (key: keyof Shortcuts) => save({ ...shortcuts, [key]: "" });
@@ -156,6 +170,20 @@
     Les touches choisies sont réservées par Hunt Tracker tant qu'il tourne : elles n'arrivent plus au jeu.
     Évite donc des touches que tu utilises dans Hunt.
   </p>
+
+  <h2 class="section">Après chaque game</h2>
+  <label class="check">
+    <input
+      type="checkbox"
+      checked={preferences.showDetailsPrompt}
+      onchange={(e) => savePreferences({ ...preferences, showDetailsPrompt: e.currentTarget.checked })}
+    />
+    Proposer les infos de la game (extraction, bounty, format, map, étoiles) juste après la validation
+  </label>
+  <p class="help">
+    Le tiroir s'ouvre sous le widget et se referme tout seul dès que la game suivante commence. Les infos restent
+    modifiables dans l'onglet Sessions (bouton ✎).
+  </p>
 </div>
 
 <style>
@@ -180,6 +208,9 @@
   .footer { display: flex; align-items: center; gap: 12px; }
   .footer button { padding: 6px 12px; }
   .saved { color: #7fbf7f; font-size: 13px; }
+  .section { margin-top: 28px; }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
   kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 12px; }
   .error { background: rgba(200, 16, 46, 0.15); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 4px; }
 </style>
