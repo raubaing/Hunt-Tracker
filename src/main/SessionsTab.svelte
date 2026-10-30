@@ -6,7 +6,7 @@
   import { cubicOut } from "svelte/easing";
   import AnimatedNumber from "../lib/AnimatedNumber.svelte";
   import { dur } from "../lib/motion";
-  import type { Session } from "../lib/types";
+  import type { Game, Session } from "../lib/types";
   import {
     listSessions,
     createSession,
@@ -14,6 +14,9 @@
     getActiveSession,
     setActiveSession,
     validateGame,
+    unvalidateGame,
+    updateGame,
+    deleteGame,
     onSessionsChanged,
     onActiveSessionChanged,
   } from "../lib/storage";
@@ -25,6 +28,10 @@
   let selectedId = $state<string | null>(null);
   let confirmDeleteId = $state<string | null>(null);
   let error = $state<string | null>(null);
+
+  // Correction d'une game validée
+  let editing = $state<{ id: number; kills: number; deaths: number; assists: number } | null>(null);
+  let confirmGameId = $state<number | null>(null);
 
   const selected = $derived(sessions.find((s) => s.id === selectedId) ?? null);
   const selectedTotals = $derived(selected ? sessionTotals(selected) : null);
@@ -71,6 +78,46 @@
       confirmDeleteId = null;
       await deleteSession(id);
       if (selectedId === id) selectedId = null;
+    });
+
+  function startEdit(g: Game) {
+    editing = { id: g.id, kills: g.kills, deaths: g.deaths, assists: g.assists };
+  }
+
+  const clampCount = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(999, Math.round(n))) : 0);
+
+  const saveEdit = () =>
+    run(async () => {
+      if (!selected || !editing) return;
+      const e = editing;
+      await updateGame(selected.id, e.id, {
+        kills: clampCount(e.kills),
+        deaths: clampCount(e.deaths),
+        assists: clampCount(e.assists),
+      });
+      editing = null;
+    });
+
+  function onEditKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") saveEdit();
+    if (e.key === "Escape") {
+      e.preventDefault(); // n'replie pas le panneau
+      editing = null;
+    }
+  }
+
+  function askDeleteGame(id: number) {
+    confirmGameId = id;
+    setTimeout(() => {
+      if (confirmGameId === id) confirmGameId = null;
+    }, 4000);
+  }
+
+  const removeGame = (id: number) =>
+    run(async () => {
+      if (!selected) return;
+      confirmGameId = null;
+      await deleteGame(selected.id, id);
     });
 
   onMount(() => {
@@ -147,22 +194,49 @@
       {:else}
         <table>
           <thead>
-            <tr><th>#</th><th>K</th><th>A</th><th>D</th><th>KDA</th></tr>
+            <tr><th>#</th><th>K</th><th>A</th><th>D</th><th>KDA</th><th></th></tr>
           </thead>
           <tbody>
-            {#each selected.games as g (g.id)}
-              <tr in:fly={{ y: -8, duration: dur(260), easing: cubicOut }}>
-                <td>{g.id}</td><td>{g.kills}</td><td>{g.assists}</td><td>{g.deaths}</td>
-                <td>{formatKda(kda(g))}</td>
+            {#each selected.games as g, i (g.id)}
+              <tr class="game" in:fly={{ y: -8, duration: dur(260), easing: cubicOut }} out:fly={{ x: -16, duration: dur(180) }}>
+                <td>{i + 1}</td>
+                {#if editing?.id === g.id}
+                  <td><input type="number" min="0" bind:value={editing.kills} onkeydown={onEditKeydown} aria-label="Kills" /></td>
+                  <td><input type="number" min="0" bind:value={editing.assists} onkeydown={onEditKeydown} aria-label="Assists" /></td>
+                  <td><input type="number" min="0" bind:value={editing.deaths} onkeydown={onEditKeydown} aria-label="Morts" /></td>
+                  <td>{formatKda(kda({ kills: clampCount(editing.kills), deaths: clampCount(editing.deaths), assists: clampCount(editing.assists) }))}</td>
+                  <td class="row-actions visible">
+                    <button class="primary small" onclick={saveEdit}>Enregistrer</button>
+                    <button class="small" onclick={() => (editing = null)}>Annuler</button>
+                  </td>
+                {:else}
+                  <td>{g.kills}</td><td>{g.assists}</td><td>{g.deaths}</td>
+                  <td>{formatKda(kda(g))}</td>
+                  <td class="row-actions" class:visible={confirmGameId === g.id}>
+                    {#if confirmGameId === g.id}
+                      <button class="danger small" onclick={() => removeGame(g.id)}>Confirmer la suppression</button>
+                    {:else}
+                      <button class="icon" title="Modifier cette game" onclick={() => startEdit(g)}>✎</button>
+                      <button class="icon" title="Supprimer cette game" onclick={() => askDeleteGame(g.id)}>🗑</button>
+                    {/if}
+                  </td>
+                {/if}
               </tr>
             {/each}
             {#if isActive}
               <tr class="current">
                 <td>En cours</td>
                 <td>{selected.current.kills}</td><td>{selected.current.assists}</td><td>{selected.current.deaths}</td>
-                <td>
-                  {formatKda(kda(selected.current))}
-                  <button class="validate" onclick={() => run(validateGame)}>Valider la game</button>
+                <td>{formatKda(kda(selected.current))}</td>
+                <td class="row-actions visible">
+                  <button class="small" onclick={() => run(validateGame)}>Valider la game</button>
+                  {#if selected.games.length > 0}
+                    <button
+                      class="small"
+                      title="La dernière game validée redevient la game en cours (Ctrl + raccourci de validation)"
+                      onclick={() => run(unvalidateGame)}>↶ Rouvrir la dernière</button
+                    >
+                  {/if}
                 </td>
               </tr>
             {/if}
@@ -212,7 +286,17 @@
   th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
   th { color: var(--muted); font-weight: 600; }
   tr.current td { color: var(--accent); font-weight: 600; }
-  .validate { margin-left: 12px; padding: 3px 10px; font-weight: 400; color: var(--text); }
+  td:first-child { white-space: nowrap; }
+  .row-actions { text-align: right; white-space: nowrap; width: 1%; }
+  .row-actions button { margin-left: 6px; font-weight: 400; color: var(--text); }
+  .row-actions:not(.visible) button { opacity: 0; transition: opacity 120ms ease; }
+  tr.game:hover .row-actions button, .row-actions button:focus-visible { opacity: 1; }
+  .row-actions .small { padding: 3px 10px; font-size: 13px; }
+  .icon { padding: 2px 8px; font-size: 13px; }
+  td input {
+    width: 48px; padding: 2px 4px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--accent); border-radius: 4px;
+  }
   .empty { color: var(--muted); }
   .placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
   .primary { background: var(--accent); border-color: var(--accent); padding: 8px 14px; font-weight: 600; }

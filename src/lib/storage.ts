@@ -15,6 +15,14 @@ export const setActiveSession = (id: string | null) => invoke<void>("set_active_
 // Game en cours (une session est créée automatiquement s'il n'y en a pas)
 export const addStat = (stat: Stat, delta: 1 | -1) => invoke<Session>("add_stat", { stat, delta });
 export const validateGame = () => invoke<Session>("validate_game");
+/** Rouvre la dernière game validée (ses compteurs s'ajoutent à la game en cours) */
+export const unvalidateGame = () => invoke<Session>("unvalidate_game");
+
+// Correction des games déjà validées (n'importe quelle session)
+export const updateGame = (sessionId: string, gameId: number, c: { kills: number; deaths: number; assists: number }) =>
+  invoke<Session>("update_game", { sessionId, gameId, ...c });
+export const deleteGame = (sessionId: string, gameId: number) =>
+  invoke<Session>("delete_game", { sessionId, gameId });
 
 // Options
 export const getSettings = () => invoke<Settings>("get_settings");

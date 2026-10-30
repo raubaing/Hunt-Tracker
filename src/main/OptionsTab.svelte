@@ -10,14 +10,14 @@
   const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11" };
 
   const rows: { key: keyof Shortcuts; label: string; counter: boolean }[] = [
-    { key: "kill", label: "Kill", counter: true },
-    { key: "assist", label: "Assist", counter: true },
-    { key: "death", label: "Mort", counter: true },
+    { key: "kill", label: "+1 Kill", counter: true },
+    { key: "assist", label: "+1 Assist", counter: true },
+    { key: "death", label: "+1 Mort", counter: true },
     { key: "validate", label: "Valider la game", counter: false },
   ];
 
-  /** Raccourci pour retirer 1 : Ctrl + le raccourci (géré automatiquement côté Rust) */
-  function minusShortcut(accel: string): string | null {
+  /** Raccourci inverse : Ctrl + le raccourci (géré automatiquement côté Rust) */
+  function ctrlShortcut(accel: string): string | null {
     if (!accel) return null;
     if (/(^|\+)(ctrl|control)(\+|$)/i.test(accel)) return null;
     return formatAccelerator(`Ctrl+${accel}`);
@@ -101,7 +101,8 @@
     (ou combinaison) voulue. <kbd>Échap</kbd> annule.
   </p>
   <p class="help">
-    <kbd>Ctrl</kbd> + le raccourci d'un compteur retire 1 (par exemple <kbd>Ctrl</kbd> + <kbd>F8</kbd> retire un kill).
+    <kbd>Ctrl</kbd> + le raccourci fait l'inverse : il retire 1 à un compteur (<kbd>Ctrl</kbd> + <kbd>F8</kbd> retire
+    un kill) ou rouvre la dernière game validée (<kbd>Ctrl</kbd> + <kbd>F11</kbd>).
   </p>
 
   {#if error}
@@ -110,7 +111,7 @@
 
   <table>
     <thead>
-      <tr><th></th><th>+1</th><th>−1</th><th></th></tr>
+      <tr><th></th><th>Raccourci</th><th>Avec Ctrl</th><th></th></tr>
     </thead>
     <tbody>
       {#each rows as row (row.key)}
@@ -127,12 +128,12 @@
             </button>
           </td>
           <td class="minus">
-            {#if row.counter}
-              {@const minus = minusShortcut(shortcuts[row.key])}
-              {#if minus}
-                {minus}
-              {:else if shortcuts[row.key]}
-                <span title="Le raccourci contient déjà Ctrl : pas de raccourci pour retirer 1">—</span>
+            {#if shortcuts[row.key]}
+              {@const ctrl = ctrlShortcut(shortcuts[row.key])}
+              {#if ctrl}
+                {ctrl} <span class="what">{row.counter ? "−1" : "rouvrir la dernière"}</span>
+              {:else}
+                <span title="Le raccourci contient déjà Ctrl : pas de raccourci inverse">—</span>
               {/if}
             {/if}
           </td>
@@ -165,7 +166,8 @@
   table { border-collapse: collapse; margin: 16px 0; }
   td { padding: 6px 12px 6px 0; }
   th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 0 12px 4px 0; }
-  .minus { min-width: 120px; color: var(--muted); font-family: Consolas, monospace; font-size: 13px; }
+  .what { font-family: "Segoe UI", system-ui, sans-serif; font-size: 12px; margin-left: 4px; }
+  .minus { white-space: nowrap; min-width: 120px; color: var(--muted); font-family: Consolas, monospace; font-size: 13px; }
   .label { min-width: 140px; }
   .key {
     min-width: 200px; padding: 6px 12px; text-align: left;

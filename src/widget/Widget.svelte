@@ -155,7 +155,11 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && expanded) collapse();
+    if (e.key !== "Escape" || !expanded) return;
+    // Laisse d'abord la main aux champs qui utilisent Échap (saisie d'un raccourci, édition d'une game)
+    setTimeout(() => {
+      if (!e.defaultPrevented) collapse();
+    });
   }
 
   // ---------- Position mémorisée ----------

@@ -105,6 +105,8 @@ enum Action {
     /// Ajoute (+1) ou retire (-1) à un compteur
     Add(Stat, i32),
     Validate,
+    /// Rouvre la dernière game validée
+    Unvalidate,
 }
 
 #[derive(Serialize)]
@@ -304,6 +306,36 @@ fn validate_game_inner<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resu
     })
 }
 
+/// Annule la dernière validation : la dernière game redevient la game en cours.
+/// Si la game suivante avait déjà commencé, ses compteurs s'ajoutent à ceux de la game rouverte.
+fn unvalidate_game_inner<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Result<Session, String> {
+    update_active(app, state, |s| {
+        if let Some(last) = s.games.pop() {
+            s.current.kills += last.kills;
+            s.current.deaths += last.deaths;
+            s.current.assists += last.assists;
+        }
+    })
+}
+
+/// Modifie n'importe quelle session (pas forcément celle en cours), sauvegarde et notifie.
+fn update_session<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &AppState,
+    id: &str,
+    change: impl FnOnce(&mut Session) -> Result<(), String>,
+) -> Result<Session, String> {
+    let _guard = state.io.lock().map_err(|e| e.to_string())?;
+    let mut session = read_session(app, id)?.ok_or_else(|| format!("Session introuvable : {id}"))?;
+    change(&mut session)?;
+    write_json(&session_path(app, &session.id)?, &session)?;
+    let _ = app.emit(EVT_SESSIONS, ());
+    if read_config(app).active_session_id.as_deref() == Some(id) {
+        let _ = app.emit(EVT_ACTIVE, ());
+    }
+    Ok(session)
+}
+
 // ---------- Raccourcis globaux ----------
 
 /// (Ré)enregistre les raccourcis auprès de Windows.
@@ -335,23 +367,27 @@ fn apply_shortcuts<R: Runtime>(app: &AppHandle<R>, state: &AppState, shortcuts: 
         labels.push(label.to_string());
     }
 
-    // Ctrl + la touche d'un compteur retire 1 (sauf si le raccourci contient déjà Ctrl)
+    // Ctrl + le raccourci fait l'inverse : retirer 1 à un compteur, ou rouvrir la dernière game.
+    // (Rien si le raccourci contient déjà Ctrl.)
     let primaries = bindings.clone();
     for (i, (shortcut, action)) in primaries.iter().enumerate() {
-        if let Action::Add(stat, _) = action {
-            if shortcut.mods.contains(Modifiers::CONTROL) {
-                continue;
-            }
-            let minus = Shortcut::new(Some(shortcut.mods | Modifiers::CONTROL), shortcut.key);
-            if let Some(j) = bindings.iter().position(|(s, _)| *s == minus) {
-                return Err(format!(
-                    "{} : le raccourci pour retirer 1 (Ctrl + la même touche) est déjà utilisé par « {} »",
-                    labels[i], labels[j]
-                ));
-            }
-            bindings.push((minus, Action::Add(*stat, -1)));
-            labels.push(format!("{} −1", labels[i]));
+        if shortcut.mods.contains(Modifiers::CONTROL) {
+            continue;
         }
+        let (inverse, what) = match action {
+            Action::Add(stat, _) => (Action::Add(*stat, -1), "retirer 1"),
+            Action::Validate => (Action::Unvalidate, "rouvrir la dernière game"),
+            Action::Unvalidate => continue,
+        };
+        let ctrl = Shortcut::new(Some(shortcut.mods | Modifiers::CONTROL), shortcut.key);
+        if let Some(j) = bindings.iter().position(|(s, _)| *s == ctrl) {
+            return Err(format!(
+                "{} : le raccourci pour {what} (Ctrl + la même touche) est déjà utilisé par « {} »",
+                labels[i], labels[j]
+            ));
+        }
+        bindings.push((ctrl, inverse));
+        labels.push(format!("{} (Ctrl)", labels[i]));
     }
 
     for (shortcut, _) in &bindings {
@@ -377,6 +413,7 @@ fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut) {
     let result = match action {
         Some(Action::Add(stat, delta)) => add_stat_inner(app, &state, stat, delta).map(|_| ()),
         Some(Action::Validate) => validate_game_inner(app, &state).map(|_| ()),
+        Some(Action::Unvalidate) => unvalidate_game_inner(app, &state).map(|_| ()),
         None => Ok(()),
     };
     if let Err(e) = result {
@@ -449,6 +486,43 @@ fn add_stat(app: AppHandle, state: State<'_, AppState>, stat: Stat, delta: i32) 
 #[tauri::command]
 fn validate_game(app: AppHandle, state: State<'_, AppState>) -> Result<Session, String> {
     validate_game_inner(&app, &state)
+}
+
+#[tauri::command]
+fn unvalidate_game(app: AppHandle, state: State<'_, AppState>) -> Result<Session, String> {
+    unvalidate_game_inner(&app, &state)
+}
+
+/// Corrige les compteurs d'une game déjà validée
+#[tauri::command]
+fn update_game(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    game_id: u32,
+    kills: u32,
+    deaths: u32,
+    assists: u32,
+) -> Result<Session, String> {
+    update_session(&app, &state, &session_id, |s| {
+        let game = s
+            .games
+            .iter_mut()
+            .find(|g| g.id == game_id)
+            .ok_or_else(|| format!("Game introuvable : {game_id}"))?;
+        game.kills = kills;
+        game.deaths = deaths;
+        game.assists = assists;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn delete_game(app: AppHandle, state: State<'_, AppState>, session_id: String, game_id: u32) -> Result<Session, String> {
+    update_session(&app, &state, &session_id, |s| {
+        s.games.retain(|g| g.id != game_id);
+        Ok(())
+    })
 }
 
 #[tauri::command]
@@ -549,6 +623,9 @@ pub fn run() {
             set_active_session,
             add_stat,
             validate_game,
+            unvalidate_game,
+            update_game,
+            delete_game,
             get_settings,
             set_shortcuts,
             pause_shortcuts,
