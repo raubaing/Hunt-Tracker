@@ -7,13 +7,15 @@
   import { getSettings, setShortcuts, pauseShortcuts, setPreferences } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
 
-  const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11" };
+  const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11", toggle: "F7" };
 
-  const rows: { key: keyof Shortcuts; label: string; counter: boolean }[] = [
-    { key: "kill", label: "+1 Kill", counter: true },
-    { key: "assist", label: "+1 Assist", counter: true },
-    { key: "death", label: "+1 Mort", counter: true },
-    { key: "validate", label: "Valider la game", counter: false },
+  // inverse : ce que fait Ctrl + le raccourci (null = rien)
+  const rows: { key: keyof Shortcuts; label: string; inverse: string | null }[] = [
+    { key: "kill", label: "+1 Kill", inverse: "−1" },
+    { key: "assist", label: "+1 Assist", inverse: "−1" },
+    { key: "death", label: "+1 Mort", inverse: "−1" },
+    { key: "validate", label: "Valider la game", inverse: "rouvrir la dernière" },
+    { key: "toggle", label: "Plier / déplier", inverse: null },
   ];
 
   /** Raccourci inverse : Ctrl + le raccourci (géré automatiquement côté Rust) */
@@ -142,10 +144,10 @@
             </button>
           </td>
           <td class="minus">
-            {#if shortcuts[row.key]}
+            {#if shortcuts[row.key] && row.inverse}
               {@const ctrl = ctrlShortcut(shortcuts[row.key])}
               {#if ctrl}
-                {ctrl} <span class="what">{row.counter ? "−1" : "rouvrir la dernière"}</span>
+                {ctrl} <span class="what">{row.inverse}</span>
               {:else}
                 <span title="Le raccourci contient déjà Ctrl : pas de raccourci inverse">—</span>
               {/if}

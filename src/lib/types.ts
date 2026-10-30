@@ -42,6 +42,8 @@ export interface Shortcuts {
   assist: string;
   death: string;
   validate: string;
+  /** Plier / déplier le panneau */
+  toggle: string;
 }
 
 /** Infos Hunt d'une game, renseignées après la validation (toutes facultatives) */

@@ -48,3 +48,6 @@ export const onActiveSessionChanged = (cb: () => void): Promise<UnlistenFn> =>
 /** Les préférences ont changé */
 export const onPreferencesChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen("preferences-changed", () => cb());
+
+/** Raccourci global « plier / déplier » pressé */
+export const onTogglePanel = (cb: () => void): Promise<UnlistenFn> => listen("toggle-panel", () => cb());

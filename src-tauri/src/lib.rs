@@ -61,6 +61,8 @@ pub struct Shortcuts {
     assist: String,
     death: String,
     validate: String,
+    /// Plier / déplier le panneau
+    toggle: String,
 }
 
 impl Default for Shortcuts {
@@ -70,6 +72,7 @@ impl Default for Shortcuts {
             assist: "F9".into(),
             death: "F10".into(),
             validate: "F11".into(),
+            toggle: "F7".into(),
         }
     }
 }
@@ -139,6 +142,8 @@ enum Action {
     Validate,
     /// Rouvre la dernière game validée
     Unvalidate,
+    /// Plie / déplie le panneau (géré par l'interface)
+    TogglePanel,
 }
 
 #[derive(Serialize)]
@@ -384,6 +389,7 @@ fn apply_shortcuts<R: Runtime>(app: &AppHandle<R>, state: &AppState, shortcuts: 
         ("Assist", &shortcuts.assist, Action::Add(Stat::Assists, 1)),
         ("Mort", &shortcuts.death, Action::Add(Stat::Deaths, 1)),
         ("Valider la game", &shortcuts.validate, Action::Validate),
+        ("Plier / déplier", &shortcuts.toggle, Action::TogglePanel),
     ];
 
     let mut bindings: Vec<(Shortcut, Action)> = Vec::new();
@@ -412,7 +418,7 @@ fn apply_shortcuts<R: Runtime>(app: &AppHandle<R>, state: &AppState, shortcuts: 
         let (inverse, what) = match action {
             Action::Add(stat, _) => (Action::Add(*stat, -1), "retirer 1"),
             Action::Validate => (Action::Unvalidate, "rouvrir la dernière game"),
-            Action::Unvalidate => continue,
+            Action::Unvalidate | Action::TogglePanel => continue,
         };
         let ctrl = Shortcut::new(Some(shortcut.mods | Modifiers::CONTROL), shortcut.key);
         if let Some(j) = bindings.iter().position(|(s, _)| *s == ctrl) {
@@ -449,6 +455,7 @@ fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut) {
         Some(Action::Add(stat, delta)) => add_stat_inner(app, &state, stat, delta).map(|_| ()),
         Some(Action::Validate) => validate_game_inner(app, &state).map(|_| ()),
         Some(Action::Unvalidate) => unvalidate_game_inner(app, &state).map(|_| ()),
+        Some(Action::TogglePanel) => app.emit("toggle-panel", ()).map_err(|e| e.to_string()),
         None => Ok(()),
     };
     if let Err(e) = result {

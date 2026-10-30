@@ -13,6 +13,7 @@
     getSettings,
     onActiveSessionChanged,
     onPreferencesChanged,
+    onTogglePanel,
     saveWidgetPosition,
     setGameDetails,
     validateGame,
@@ -282,6 +283,7 @@
     const offs = [
       onActiveSessionChanged(refresh),
       onPreferencesChanged(loadPreferences),
+      onTogglePanel(toggle),
       win.onMoved(({ payload }) => onMoved(payload)),
     ];
     return () => {
@@ -320,7 +322,7 @@
           <button
             class="toggle"
             class:open={expanded}
-            title={expanded ? "Replier (Échap)" : "Déplier : sessions et options"}
+            title={expanded ? "Replier (Échap ou raccourci)" : "Déplier : sessions, options (ou raccourci, F7 par défaut)"}
             onclick={toggle}>⤢</button
           >
           <button title="Quitter Hunt Tracker" onclick={quit}>✕</button>
