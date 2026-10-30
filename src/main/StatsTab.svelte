@@ -190,7 +190,7 @@
 </div>
 
 <style>
-  .stats-tab { padding: 20px 32px 32px; overflow-y: auto; }
+  .stats-tab { padding: 20px 32px 32px; overflow-y: auto; overflow-x: hidden; }
   .filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
   .group { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .group button { border: none; border-radius: 0; padding: 5px 11px; font-size: 13px; background: var(--panel); color: var(--muted); }

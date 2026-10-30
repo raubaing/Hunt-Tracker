@@ -338,7 +338,7 @@
 <style>
   .layout { display: grid; grid-template-columns: 260px 1fr; height: 100%; min-height: 0; }
   aside { background: var(--panel); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; }
-  section { padding: 24px 32px; overflow-y: auto; }
+  section { padding: 24px 32px; overflow-y: auto; overflow-x: hidden; }
   ul { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   .new { width: 100%; }
   .item {

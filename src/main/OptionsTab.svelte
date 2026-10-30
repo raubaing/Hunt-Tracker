@@ -109,6 +109,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="options">
+<div class="inner">
   <h1>Options</h1>
 
   <h2>Raccourcis clavier</h2>
@@ -187,9 +188,12 @@
     modifiables dans l'onglet Sessions (bouton ✎).
   </p>
 </div>
+</div>
 
 <style>
-  .options { padding: 24px 32px; max-width: 640px; overflow-y: auto; }
+  /* Le conteneur défilant prend toute la largeur ; seul le contenu est limité */
+  .options { padding: 24px 32px; overflow-y: auto; overflow-x: hidden; }
+  .inner { max-width: 760px; }
   h1 { margin: 0 0 16px; font-size: 24px; }
   h2 { font-size: 16px; margin: 0 0 4px; }
   .help { color: var(--muted); font-size: 13px; line-height: 1.5; }
