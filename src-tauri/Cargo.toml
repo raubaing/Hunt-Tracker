@@ -1,6 +1,6 @@
 [package]
 name = "hunt-tracker"
-version = "0.2.0"
+version = "0.2.1"
 description = "Suivi de sessions Hunt: Showdown 1896"
 edition = "2021"
 
