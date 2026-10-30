@@ -1,7 +1,7 @@
 // Accès aux données (géré côté Rust, dans %APPDATA%\com.robinnaud.hunttracker)
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { GameDetails, Preferences, Session, Settings, Shortcuts, Stat } from "./types";
+import type { Game, GameDetails, Preferences, Session, Settings, Shortcuts, Stat } from "./types";
 
 // Sessions
 export const listSessions = () => invoke<Session[]>("list_sessions");
@@ -23,6 +23,9 @@ export const unvalidateGame = () => invoke<Session>("unvalidate_game");
 // Correction des games déjà validées (n'importe quelle session)
 export const updateGame = (sessionId: string, gameId: number, c: { kills: number; deaths: number; assists: number }) =>
   invoke<Session>("update_game", { sessionId, gameId, ...c });
+/** Annule la suppression d'une game : la remet à sa position d'origine */
+export const restoreGame = (sessionId: string, game: Game, index: number) =>
+  invoke<Session>("restore_game", { sessionId, game, index });
 export const deleteGame = (sessionId: string, gameId: number) =>
   invoke<Session>("delete_game", { sessionId, gameId });
 /** Infos Hunt d'une game (remplace les valeurs existantes) */

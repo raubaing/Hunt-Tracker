@@ -655,6 +655,25 @@ fn set_preferences(app: AppHandle, state: State<'_, AppState>, preferences: Pref
     Ok(())
 }
 
+/// Remet une game supprimée à sa place (annulation d'une suppression)
+#[tauri::command]
+fn restore_game(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    game: Game,
+    index: usize,
+) -> Result<Session, String> {
+    update_session(&app, &state, &session_id, |s| {
+        if s.games.iter().any(|g| g.id == game.id) {
+            return Err("Cette game existe déjà".into());
+        }
+        let i = index.min(s.games.len());
+        s.games.insert(i, game);
+        Ok(())
+    })
+}
+
 #[tauri::command]
 fn delete_game(app: AppHandle, state: State<'_, AppState>, session_id: String, game_id: u32) -> Result<Session, String> {
     update_session(&app, &state, &session_id, |s| {
@@ -830,6 +849,7 @@ pub fn run() {
             unvalidate_game,
             update_game,
             delete_game,
+            restore_game,
             set_game_details,
             set_session_note,
             set_preferences,

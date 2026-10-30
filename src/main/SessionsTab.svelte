@@ -9,6 +9,7 @@
   import type { Game, GameDetails, Session } from "../lib/types";
   import { detailsOf, mapShort, teamLabel } from "../lib/hunt";
   import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
+  import UndoToast, { type UndoMessage } from "../lib/UndoToast.svelte";
   import {
     listSessions,
     createSession,
@@ -19,6 +20,8 @@
     unvalidateGame,
     updateGame,
     deleteGame,
+    restoreGame,
+    saveSession,
     setGameDetails,
     setSessionNote,
     onSessionsChanged,
@@ -30,12 +33,15 @@
   let sessions = $state<Session[]>([]);
   let activeId = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
-  let confirmDeleteId = $state<string | null>(null);
+  // Dernière suppression, annulable quelques secondes
+  let undoMessage = $state<UndoMessage | null>(null);
+  let undoCounter = 0;
+  const offerUndo = (text: string, undo: () => Promise<unknown>) =>
+    (undoMessage = { id: ++undoCounter, text, undo: () => run(undo) });
   let error = $state<string | null>(null);
 
   // Correction d'une game validée
   let editing = $state<{ id: number; kills: number; deaths: number; assists: number; details: GameDetails } | null>(null);
-  let confirmGameId = $state<number | null>(null);
 
   const selected = $derived(sessions.find((s) => s.id === selectedId) ?? null);
   const selectedTotals = $derived(selected ? sessionTotals(selected) : null);
@@ -70,18 +76,19 @@
 
   const activate = (id: string) => run(() => setActiveSession(id));
 
-  function askDelete(id: string) {
-    confirmDeleteId = id;
-    setTimeout(() => {
-      if (confirmDeleteId === id) confirmDeleteId = null;
-    }, 4000);
-  }
-
   const remove = (id: string) =>
     run(async () => {
-      confirmDeleteId = null;
+      const session = sessions.find((s) => s.id === id);
+      if (!session) return;
+      const backup = $state.snapshot(session) as Session;
+      const wasActive = id === activeId;
       await deleteSession(id);
       if (selectedId === id) selectedId = null;
+      offerUndo(`« ${backup.name} » supprimée`, async () => {
+        await saveSession(backup);
+        if (wasActive) await setActiveSession(backup.id);
+        selectedId = backup.id;
+      });
     });
 
   function startEdit(g: Game) {
@@ -111,18 +118,15 @@
     }
   }
 
-  function askDeleteGame(id: number) {
-    confirmGameId = id;
-    setTimeout(() => {
-      if (confirmGameId === id) confirmGameId = null;
-    }, 4000);
-  }
-
   const removeGame = (id: number) =>
     run(async () => {
       if (!selected) return;
-      confirmGameId = null;
-      await deleteGame(selected.id, id);
+      const sessionId = selected.id;
+      const index = selected.games.findIndex((g) => g.id === id);
+      if (index < 0) return;
+      const backup = $state.snapshot(selected.games[index]) as Game;
+      await deleteGame(sessionId, id);
+      offerUndo(`Game ${index + 1} supprimée`, () => restoreGame(sessionId, backup, index));
     });
 
   // ---------- Note libre (enregistrée automatiquement) ----------
@@ -171,6 +175,7 @@
 </script>
 
 <div class="layout">
+  <UndoToast message={undoMessage} onclose={() => (undoMessage = null)} />
   <aside>
     <button class="primary new" onclick={create}>＋ Nouvelle session</button>
 
@@ -222,11 +227,7 @@
           {:else}
             <button onclick={() => activate(selected.id)}>Définir comme session en cours</button>
           {/if}
-          {#if confirmDeleteId === selected.id}
-            <button class="danger" onclick={() => remove(selected.id)}>Confirmer la suppression</button>
-          {:else}
-            <button onclick={() => askDelete(selected.id)}>Supprimer</button>
-          {/if}
+          <button onclick={() => remove(selected.id)}>Supprimer</button>
         </div>
       </header>
 
@@ -289,13 +290,9 @@
                       {#if g.mmrStars}<span class="chip stars" title="{g.mmrStars} étoiles MMR">★{g.mmrStars}</span>{/if}
                     </div>
                   </td>
-                  <td class="row-actions" class:visible={confirmGameId === g.id}>
-                    {#if confirmGameId === g.id}
-                      <button class="danger small" onclick={() => removeGame(g.id)}>Confirmer la suppression</button>
-                    {:else}
-                      <button class="icon" title="Modifier cette game" onclick={() => startEdit(g)}>✎</button>
-                      <button class="icon" title="Supprimer cette game" onclick={() => askDeleteGame(g.id)}>🗑</button>
-                    {/if}
+                  <td class="row-actions">
+                    <button class="icon" title="Modifier cette game" onclick={() => startEdit(g)}>✎</button>
+                    <button class="icon" title="Supprimer cette game (annulable)" onclick={() => removeGame(g.id)}>🗑</button>
                   </td>
                 {/if}
               </tr>
@@ -336,7 +333,7 @@
 </div>
 
 <style>
-  .layout { display: grid; grid-template-columns: 260px 1fr; height: 100%; min-height: 0; }
+  .layout { position: relative; display: grid; grid-template-columns: 260px 1fr; height: 100%; min-height: 0; }
   aside { background: var(--panel); border-right: 1px solid var(--border); padding: 16px; overflow-y: auto; }
   section { padding: 24px 32px; overflow-y: auto; overflow-x: hidden; }
   ul { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -410,7 +407,6 @@
   .placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
   .primary { background: var(--accent); border-color: var(--accent); padding: 8px 14px; font-weight: 600; }
   .primary:hover { filter: brightness(1.1); }
-  .danger { background: var(--accent); border-color: var(--accent); animation: pulse-border 1s ease-in-out infinite; }
   .stats div { transition: border-color 200ms ease; }
   .stats div:hover { border-color: var(--muted); }
   .error { animation: shake 300ms ease; }
