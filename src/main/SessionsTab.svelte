@@ -302,7 +302,7 @@
             {/each}
             {#if isActive}
               <tr class="current">
-                <td>En cours</td>
+                <td title="Game en cours">▶</td>
                 <td>{selected.current.kills}</td><td>{selected.current.assists}</td><td>{selected.current.deaths}</td>
                 <td>{formatKda(kda(selected.current))}</td>
                 <td></td>

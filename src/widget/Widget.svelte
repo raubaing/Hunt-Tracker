@@ -14,6 +14,7 @@
     onActiveSessionChanged,
     onPreferencesChanged,
     onTogglePanel,
+    savePanelSize,
     saveWidgetPosition,
     setGameDetails,
     setPreferences,
@@ -29,7 +30,10 @@
 
   const BAR = { w: 340, h: 80 };
   const DRAWER_H = 118; // tiroir des infos de game, sous la barre
-  const PANEL = { w: 920, h: 640 };
+  const PANEL_DEFAULT = { w: 920, h: 640 };
+  const PANEL_MIN = { w: 760, h: 480 };
+  // Taille du panneau déplié, redimensionnable avec la poignée en bas à droite et mémorisée
+  let panel = $state({ ...PANEL_DEFAULT });
   const DRAWER_AUTOCLOSE_MS = 25000;
   const ANIM_MS = 320;
 
@@ -73,7 +77,14 @@
   const dragRegion = $derived(prefs.locked ? undefined : "");
   async function loadPreferences() {
     try {
-      prefs = (await getSettings()).preferences;
+      const settings = await getSettings();
+      prefs = settings.preferences;
+      if (settings.panelSize && !expanded) {
+        panel = {
+          w: Math.max(PANEL_MIN.w, settings.panelSize.w),
+          h: Math.max(PANEL_MIN.h, settings.panelSize.h),
+        };
+      }
     } catch (e) {
       console.error(e);
     }
@@ -236,12 +247,12 @@
       let y = pos.y;
       const area = await workArea();
       if (area) {
-        x = Math.max(area.x, Math.min(pos.x, area.x + area.w - PANEL.w));
-        y = Math.max(area.y, Math.min(pos.y, area.y + area.h - PANEL.h));
+        x = Math.max(area.x, Math.min(pos.x, area.x + area.w - panel.w));
+        y = Math.max(area.y, Math.min(pos.y, area.y + area.h - panel.h));
       }
 
       animate = false;
-      await win.setSize(new LogicalSize(PANEL.w, PANEL.h));
+      await win.setSize(new LogicalSize(panel.w, panel.h));
       if (x !== pos.x || y !== pos.y) {
         offset = { x: pos.x - x, y: pos.y - y };
         await tick();
@@ -309,6 +320,48 @@
     });
   }
 
+  // ---------- Redimensionnement du panneau ----------
+  let resize: { x: number; y: number; w: number; h: number; maxW: number; maxH: number } | null = null;
+  let resizeFrame = 0;
+
+  async function startResize(e: PointerEvent) {
+    if (!expanded || busy) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const start = { x: e.screenX, y: e.screenY };
+    const sf = await win.scaleFactor();
+    const pos = (await win.outerPosition()).toLogical(sf);
+    const area = await workArea();
+    resize = {
+      ...start,
+      w: panel.w,
+      h: panel.h,
+      maxW: area ? area.x + area.w - pos.x : 4000,
+      maxH: area ? area.y + area.h - pos.y : 4000,
+    };
+    animate = false;
+  }
+
+  function onResizeMove(e: PointerEvent) {
+    if (!resize) return;
+    const r = resize;
+    panel = {
+      w: Math.round(Math.max(PANEL_MIN.w, Math.min(r.maxW, r.w + e.screenX - r.x))),
+      h: Math.round(Math.max(PANEL_MIN.h, Math.min(r.maxH, r.h + e.screenY - r.y))),
+    };
+    // Une seule mise à jour de la fenêtre par image
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => win.setSize(new LogicalSize(panel.w, panel.h)).catch(console.error));
+  }
+
+  function endResize(e: PointerEvent) {
+    if (!resize) return;
+    resize = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    win.setSize(new LogicalSize(panel.w, panel.h)).catch(console.error);
+    safe(() => savePanelSize(panel.w, panel.h));
+  }
+
   // ---------- Position mémorisée ----------
   // On enregistre la position de la barre (et non de la fenêtre agrandie), un peu après
   // la fin du déplacement pour ne pas écrire le fichier en continu.
@@ -357,8 +410,8 @@
   class:up={drawerUp && !expanded}
   style:left="{expanded ? 0 : offset.x}px"
   style:top="{expanded ? 0 : offset.y - (drawerOpen && drawerUp ? DRAWER_H : 0)}px"
-  style:width="{expanded ? PANEL.w : BAR.w}px"
-  style:height="{expanded ? PANEL.h : BAR.h + (drawerOpen ? DRAWER_H : 0)}px"
+  style:width="{expanded ? panel.w : BAR.w}px"
+  style:height="{expanded ? panel.h : BAR.h + (drawerOpen ? DRAWER_H : 0)}px"
   style:--anim="{dur(ANIM_MS)}ms"
 >
   <div class="header">
@@ -449,6 +502,17 @@
     <div class="panel" class:visible={expanded}>
       <Panel {tab} />
     </div>
+    <div
+      class="resize-grip"
+      class:visible={expanded}
+      title="Redimensionner le panneau"
+      role="separator"
+      aria-label="Redimensionner le panneau"
+      onpointerdown={startResize}
+      onpointermove={onResizeMove}
+      onpointerup={endResize}
+      onpointercancel={endResize}
+    ></div>
   {/if}
 </div>
 
@@ -556,6 +620,17 @@
   .drawer-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; }
   .drawer-head em { color: var(--muted); font-weight: 400; font-style: normal; }
   .ok { padding: 0 10px; font-size: 12px; }
+
+  /* ---------- Poignée de redimensionnement (coin bas droit) ---------- */
+  .resize-grip {
+    position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; z-index: 5;
+    cursor: nwse-resize; opacity: 0; transition: opacity 200ms ease;
+    background:
+      linear-gradient(135deg, transparent 50%, var(--muted) 50%, var(--muted) 56%, transparent 56%,
+        transparent 68%, var(--muted) 68%, var(--muted) 74%, transparent 74%);
+  }
+  .resize-grip.visible { opacity: 0.5; transition-delay: 200ms; }
+  .resize-grip.visible:hover { opacity: 1; }
 
   /* ---------- Panneau ---------- */
   .panel {

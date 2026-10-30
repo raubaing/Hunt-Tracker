@@ -130,6 +130,15 @@ struct Config {
     widget_position: Option<WidgetPosition>,
     #[serde(default)]
     preferences: Preferences,
+    #[serde(default)]
+    panel_size: Option<PanelSize>,
+}
+
+/// Taille du panneau déplié, en pixels logiques
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct PanelSize {
+    w: f64,
+    h: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -156,6 +165,7 @@ enum Action {
 struct Settings {
     shortcuts: Shortcuts,
     preferences: Preferences,
+    panel_size: Option<PanelSize>,
     /// Erreur d'enregistrement des raccourcis (touche déjà prise par une autre appli…)
     shortcut_error: Option<String>,
 }
@@ -658,6 +668,7 @@ fn get_settings(app: AppHandle, state: State<'_, AppState>) -> Settings {
     Settings {
         shortcuts: read_config(&app).shortcuts,
         preferences: read_config(&app).preferences,
+        panel_size: read_config(&app).panel_size,
         shortcut_error: state.shortcut_error.lock().ok().and_then(|e| e.clone()),
     }
 }
@@ -688,6 +699,18 @@ fn pause_shortcuts(app: AppHandle, state: State<'_, AppState>, paused: bool) -> 
     } else {
         apply_shortcuts(&app, &state, &read_config(&app).shortcuts)
     }
+}
+
+/// Mémorise la taille du panneau déplié (après un redimensionnement).
+#[tauri::command]
+fn save_panel_size(app: AppHandle, state: State<'_, AppState>, w: f64, h: f64) -> Result<(), String> {
+    if !(w.is_finite() && h.is_finite()) || w < 200.0 || h < 200.0 || w > 10000.0 || h > 10000.0 {
+        return Err("Taille de panneau invalide".into());
+    }
+    let _guard = state.io.lock().map_err(|e| e.to_string())?;
+    let mut config = read_config(&app);
+    config.panel_size = Some(PanelSize { w, h });
+    write_config(&app, &config)
 }
 
 /// Mémorise la position de la barre du widget (appelé après un déplacement).
@@ -761,7 +784,8 @@ pub fn run() {
             get_settings,
             set_shortcuts,
             pause_shortcuts,
-            save_widget_position
+            save_widget_position,
+            save_panel_size
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Hunt Tracker");

@@ -67,6 +67,8 @@ export interface Preferences {
 export interface Settings {
   shortcuts: Shortcuts;
   preferences: Preferences;
+  /** Taille mémorisée du panneau déplié (null = taille par défaut) */
+  panelSize: { w: number; h: number } | null;
   shortcutError: string | null;
 }
 
