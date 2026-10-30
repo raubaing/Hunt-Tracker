@@ -9,12 +9,19 @@
 
   const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11" };
 
-  const rows: { key: keyof Shortcuts; label: string }[] = [
-    { key: "kill", label: "+1 Kill" },
-    { key: "assist", label: "+1 Assist" },
-    { key: "death", label: "+1 Mort" },
-    { key: "validate", label: "Valider la game" },
+  const rows: { key: keyof Shortcuts; label: string; counter: boolean }[] = [
+    { key: "kill", label: "Kill", counter: true },
+    { key: "assist", label: "Assist", counter: true },
+    { key: "death", label: "Mort", counter: true },
+    { key: "validate", label: "Valider la game", counter: false },
   ];
+
+  /** Raccourci pour retirer 1 : Ctrl + le raccourci (géré automatiquement côté Rust) */
+  function minusShortcut(accel: string): string | null {
+    if (!accel) return null;
+    if (/(^|\+)(ctrl|control)(\+|$)/i.test(accel)) return null;
+    return formatAccelerator(`Ctrl+${accel}`);
+  }
 
   let shortcuts = $state<Shortcuts>({ ...DEFAULTS });
   let capturing = $state<keyof Shortcuts | null>(null);
@@ -93,12 +100,18 @@
     Ils fonctionnent même quand le jeu est au premier plan. Clique sur un raccourci puis appuie sur la touche
     (ou combinaison) voulue. <kbd>Échap</kbd> annule.
   </p>
+  <p class="help">
+    <kbd>Ctrl</kbd> + le raccourci d'un compteur retire 1 (par exemple <kbd>Ctrl</kbd> + <kbd>F8</kbd> retire un kill).
+  </p>
 
   {#if error}
     <p class="error" transition:fade={{ duration: dur(200) }}>{error}</p>
   {/if}
 
   <table>
+    <thead>
+      <tr><th></th><th>+1</th><th>−1</th><th></th></tr>
+    </thead>
     <tbody>
       {#each rows as row (row.key)}
         <tr>
@@ -112,6 +125,16 @@
             >
               {capturing === row.key ? "Appuie sur une touche…" : formatAccelerator(shortcuts[row.key])}
             </button>
+          </td>
+          <td class="minus">
+            {#if row.counter}
+              {@const minus = minusShortcut(shortcuts[row.key])}
+              {#if minus}
+                {minus}
+              {:else if shortcuts[row.key]}
+                <span title="Le raccourci contient déjà Ctrl : pas de raccourci pour retirer 1">—</span>
+              {/if}
+            {/if}
           </td>
           <td>
             {#if shortcuts[row.key]}
@@ -141,6 +164,8 @@
   .help { color: var(--muted); font-size: 13px; line-height: 1.5; }
   table { border-collapse: collapse; margin: 16px 0; }
   td { padding: 6px 12px 6px 0; }
+  th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 0 12px 4px 0; }
+  .minus { min-width: 120px; color: var(--muted); font-family: Consolas, monospace; font-size: 13px; }
   .label { min-width: 140px; }
   .key {
     min-width: 200px; padding: 6px 12px; text-align: left;

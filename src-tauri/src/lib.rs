@@ -2,7 +2,7 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // ---------- Modèle de données (miroir de src/lib/types.ts) ----------
 
@@ -93,7 +93,8 @@ pub enum Stat {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
-    Add(Stat),
+    /// Ajoute (+1) ou retire (-1) à un compteur
+    Add(Stat, i32),
     Validate,
 }
 
@@ -303,13 +304,14 @@ fn apply_shortcuts<R: Runtime>(app: &AppHandle<R>, state: &AppState, shortcuts: 
     state.bindings.lock().map_err(|e| e.to_string())?.clear();
 
     let wanted = [
-        ("Kill", &shortcuts.kill, Action::Add(Stat::Kills)),
-        ("Assist", &shortcuts.assist, Action::Add(Stat::Assists)),
-        ("Mort", &shortcuts.death, Action::Add(Stat::Deaths)),
+        ("Kill", &shortcuts.kill, Action::Add(Stat::Kills, 1)),
+        ("Assist", &shortcuts.assist, Action::Add(Stat::Assists, 1)),
+        ("Mort", &shortcuts.death, Action::Add(Stat::Deaths, 1)),
         ("Valider la game", &shortcuts.validate, Action::Validate),
     ];
 
     let mut bindings: Vec<(Shortcut, Action)> = Vec::new();
+    let mut labels: Vec<String> = Vec::new();
     for (label, accel, action) in wanted {
         if accel.trim().is_empty() {
             continue;
@@ -317,10 +319,30 @@ fn apply_shortcuts<R: Runtime>(app: &AppHandle<R>, state: &AppState, shortcuts: 
         let shortcut: Shortcut = accel
             .parse()
             .map_err(|e| format!("{label} : raccourci « {accel} » invalide ({e})"))?;
-        if bindings.iter().any(|(s, _)| *s == shortcut) {
-            return Err(format!("{label} : « {accel} » est déjà utilisé par une autre action"));
+        if let Some(i) = bindings.iter().position(|(s, _)| *s == shortcut) {
+            return Err(format!("{label} : « {accel} » est déjà utilisé par « {} »", labels[i]));
         }
         bindings.push((shortcut, action));
+        labels.push(label.to_string());
+    }
+
+    // Ctrl + la touche d'un compteur retire 1 (sauf si le raccourci contient déjà Ctrl)
+    let primaries = bindings.clone();
+    for (i, (shortcut, action)) in primaries.iter().enumerate() {
+        if let Action::Add(stat, _) = action {
+            if shortcut.mods.contains(Modifiers::CONTROL) {
+                continue;
+            }
+            let minus = Shortcut::new(Some(shortcut.mods | Modifiers::CONTROL), shortcut.key);
+            if let Some(j) = bindings.iter().position(|(s, _)| *s == minus) {
+                return Err(format!(
+                    "{} : le raccourci pour retirer 1 (Ctrl + la même touche) est déjà utilisé par « {} »",
+                    labels[i], labels[j]
+                ));
+            }
+            bindings.push((minus, Action::Add(*stat, -1)));
+            labels.push(format!("{} −1", labels[i]));
+        }
     }
 
     for (shortcut, _) in &bindings {
@@ -344,7 +366,7 @@ fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut) {
         .ok()
         .and_then(|b| b.iter().find(|(s, _)| s == shortcut).map(|(_, a)| *a));
     let result = match action {
-        Some(Action::Add(stat)) => add_stat_inner(app, &state, stat, 1).map(|_| ()),
+        Some(Action::Add(stat, delta)) => add_stat_inner(app, &state, stat, delta).map(|_| ()),
         Some(Action::Validate) => validate_game_inner(app, &state).map(|_| ()),
         None => Ok(()),
     };
