@@ -1,4 +1,4 @@
-import type { Game } from "./types";
+import type { Session } from "./types";
 
 export interface Totals {
   kills: number;
@@ -7,16 +7,13 @@ export interface Totals {
   games: number;
 }
 
-export function totals(games: Game[]): Totals {
-  return games.reduce(
-    (t, g) => ({
-      kills: t.kills + g.kills,
-      deaths: t.deaths + g.deaths,
-      assists: t.assists + g.assists,
-      games: t.games + 1,
-    }),
-    { kills: 0, deaths: 0, assists: 0, games: 0 },
+/** Totaux de la session : games validées + game en cours */
+export function sessionTotals(session: Session): Totals {
+  const t = session.games.reduce(
+    (t, g) => ({ kills: t.kills + g.kills, deaths: t.deaths + g.deaths, assists: t.assists + g.assists }),
+    { ...session.current },
   );
+  return { ...t, games: session.games.length };
 }
 
 /** KDA = (K + A) / D ; si 0 mort, KDA = K + A */
