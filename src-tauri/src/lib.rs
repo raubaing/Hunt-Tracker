@@ -741,6 +741,55 @@ fn restore_widget_position<R: Runtime>(app: &AppHandle<R>) {
     let _ = window.show();
 }
 
+// ---------- Icône dans la barre des tâches système (zone de notification) ----------
+
+fn toggle_widget<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(w) = app.get_webview_window("widget") {
+        if w.is_visible().unwrap_or(false) {
+            let _ = w.hide();
+        } else {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }
+}
+
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+    let widget = MenuItem::with_id(app, "toggle-widget", "Afficher / masquer le widget", true, None::<&str>)?;
+    let panel = MenuItem::with_id(app, "toggle-panel", "Plier / déplier le panneau", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quitter Hunt Tracker", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&widget, &panel, &PredefinedMenuItem::separator(app)?, &quit])?;
+
+    let mut tray = TrayIconBuilder::with_id("hunt-tracker")
+        .tooltip("Hunt Tracker")
+        .menu(&menu)
+        .show_menu_on_left_click(false) // clic gauche : afficher / masquer ; clic droit : menu
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "toggle-widget" => toggle_widget(app),
+            "toggle-panel" => {
+                if let Some(w) = app.get_webview_window("widget") {
+                    let _ = w.show();
+                }
+                let _ = app.emit("toggle-panel", ());
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                toggle_widget(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -764,6 +813,9 @@ pub fn run() {
                 }
             }
             restore_widget_position(handle);
+            if let Err(e) = build_tray(app) {
+                eprintln!("Icône de notification : {e}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
