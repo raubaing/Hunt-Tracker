@@ -93,11 +93,13 @@ struct WidgetPosition {
 pub struct Preferences {
     /// Proposer les infos de la game (extraction, map…) juste après la validation
     show_details_prompt: bool,
+    /// Position du widget verrouillée (plus de déplacement par cliquer-glisser)
+    locked: bool,
 }
 
 impl Default for Preferences {
     fn default() -> Self {
-        Self { show_details_prompt: true }
+        Self { show_details_prompt: true, locked: false }
     }
 }
 

@@ -5,7 +5,7 @@
   import { onMount, tick } from "svelte";
   import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
   import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
-  import type { GameDetails, Session, Stat, Tab } from "../lib/types";
+  import type { GameDetails, Preferences, Session, Stat, Tab } from "../lib/types";
   import {
     addStat,
     createSession,
@@ -16,6 +16,7 @@
     onTogglePanel,
     saveWidgetPosition,
     setGameDetails,
+    setPreferences,
     validateGame,
   } from "../lib/storage";
   import { detailsOf } from "../lib/hunt";
@@ -66,14 +67,18 @@
     }
   }
 
-  let showDetailsPrompt = $state(true);
+  let prefs = $state<Preferences>({ showDetailsPrompt: true, locked: false });
+  const showDetailsPrompt = $derived(prefs.showDetailsPrompt);
+  // Attribut de déplacement : présent ("") si déverrouillé, absent (undefined) si verrouillé
+  const dragRegion = $derived(prefs.locked ? undefined : "");
   async function loadPreferences() {
     try {
-      showDetailsPrompt = (await getSettings()).preferences.showDetailsPrompt;
+      prefs = (await getSettings()).preferences;
     } catch (e) {
       console.error(e);
     }
   }
+  const toggleLock = () => safe(() => setPreferences({ ...prefs, locked: !prefs.locked }));
 
   // Quand une game est validée (bouton ou raccourci) : flash de la barre + tiroir des infos.
   // Quand elle est rouverte : on referme le tiroir.
@@ -357,12 +362,12 @@
   style:--anim="{dur(ANIM_MS)}ms"
 >
   <div class="header">
-    <!-- data-tauri-drag-region : cliquer-glisser sur la barre déplace la fenêtre -->
-    <div class="bar" class:flash data-tauri-drag-region>
-      <div class="top" data-tauri-drag-region>
+    <!-- data-tauri-drag-region : cliquer-glisser sur la barre déplace la fenêtre (sauf si verrouillée) -->
+    <div class="bar" class:flash data-tauri-drag-region={dragRegion}>
+      <div class="top" data-tauri-drag-region={dragRegion}>
         {#if active && !stale}
-          <span class="title" data-tauri-drag-region>{active.name}</span>
-          <span class="kda" data-tauri-drag-region title="KDA de la session">
+          <span class="title" data-tauri-drag-region={dragRegion}>{active.name}</span>
+          <span class="kda" data-tauri-drag-region={dragRegion} title="KDA de la session">
             KDA <AnimatedNumber value={sessionKda} decimals={2} />
           </span>
         {:else}
@@ -376,6 +381,23 @@
         {/if}
         <div class="win">
           <button
+            class="lock"
+            class:locked={prefs.locked}
+            title={prefs.locked ? "Position verrouillée : clique pour déverrouiller" : "Verrouiller la position du widget"}
+            aria-pressed={prefs.locked}
+            onclick={toggleLock}
+          >
+            <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true">
+              <rect x="1" y="5" width="8" height="6.5" rx="1.2" fill="currentColor" />
+              <path
+                d={prefs.locked ? "M2.8 5V3.4a2.2 2.2 0 0 1 4.4 0V5" : "M2.8 5V3.4a2.2 2.2 0 0 1 4.3-.7"}
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+            </svg>
+          </button>
+          <button
             class="toggle"
             class:open={expanded}
             title={expanded ? "Replier (Échap ou raccourci)" : "Déplier : sessions, options (ou raccourci, F7 par défaut)"}
@@ -385,7 +407,7 @@
         </div>
       </div>
 
-      <div class="counters" data-tauri-drag-region>
+      <div class="counters" data-tauri-drag-region={dragRegion}>
         {#each stats as s (s.key)}
           <div class="stat" title={s.title}>
             <button class="pm" onclick={() => safe(() => addStat(s.key, -1))} disabled={current[s.key] === 0}>−</button>
@@ -401,7 +423,7 @@
     </div>
 
     {#if panelMounted}
-      <nav class="tabs" class:visible={expanded} data-tauri-drag-region>
+      <nav class="tabs" class:visible={expanded} data-tauri-drag-region={dragRegion}>
         <button class:active={tab === "sessions"} onclick={() => (tab = "sessions")}>Sessions</button>
         <button class:active={tab === "stats"} onclick={() => (tab = "stats")}>Stats</button>
         <button class:active={tab === "options"} onclick={() => (tab = "options")}>Options</button>
@@ -467,6 +489,8 @@
   .new { padding: 1px 8px; font-size: 12px; margin-right: auto; }
   .win { display: flex; gap: 4px; flex-shrink: 0; }
   .win button { padding: 0 6px; font-size: 12px; }
+  .lock { display: inline-flex; align-items: center; color: var(--muted); }
+  .lock.locked { color: var(--accent); border-color: var(--accent); }
   .toggle { transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 120ms; }
   .toggle.open { transform: rotate(90deg); }
   .toggle.open:active { transform: rotate(90deg) scale(0.95); }

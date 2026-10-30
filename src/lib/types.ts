@@ -60,6 +60,8 @@ export interface GameDetails {
 export interface Preferences {
   /** Proposer les infos de la game juste après la validation */
   showDetailsPrompt: boolean;
+  /** Position du widget verrouillée */
+  locked: boolean;
 }
 
 export interface Settings {

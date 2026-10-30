@@ -26,7 +26,7 @@
   }
 
   let shortcuts = $state<Shortcuts>({ ...DEFAULTS });
-  let preferences = $state<Preferences>({ showDetailsPrompt: true });
+  let preferences = $state<Preferences>({ showDetailsPrompt: true, locked: false });
   let capturing = $state<keyof Shortcuts | null>(null);
   let error = $state<string | null>(null);
   let saved = $state(false);
@@ -173,6 +173,16 @@
     Les touches choisies sont réservées par Hunt Tracker tant qu'il tourne : elles n'arrivent plus au jeu.
     Évite donc des touches que tu utilises dans Hunt.
   </p>
+
+  <h2 class="section">Widget</h2>
+  <label class="check">
+    <input
+      type="checkbox"
+      checked={preferences.locked}
+      onchange={(e) => savePreferences({ ...preferences, locked: e.currentTarget.checked })}
+    />
+    Verrouiller la position du widget (aussi avec le cadenas dans la barre)
+  </label>
 
   <h2 class="section">Après chaque game</h2>
   <label class="check">
