@@ -1,6 +1,6 @@
 # Publie une version : onglet Actions > « Release » > « Run workflow ».
 # - Le numéro vient de src-tauri/tauri.conf.json (ex. 0.3.0 → tag v0.3.0)
-# - Crée la Release GitHub publique avec l'installeur signé et latest.json :
+# - Crée la Release GitHub (brouillon → publiée) avec l'installeur signé et latest.json :
 #   les applis déjà installées proposent alors la mise à jour au lancement.
 name: Release
 
@@ -34,6 +34,7 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -42,6 +43,15 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Hunt Tracker v__VERSION__"
           releaseBody: ${{ inputs.notes != '' && inputs.notes || 'Télécharge le fichier *-setup.exe ci-dessous pour installer. Si Hunt Tracker est déjà installé, la mise à jour est proposée automatiquement au lancement.' }}
-          releaseDraft: false
+          # Brouillon d'abord : avec les « releases immuables » de GitHub, on ne peut plus
+          # ajouter de fichiers à une release publiée. On publie donc à l'étape suivante.
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
+      - name: Publier la release (fichiers déjà envoyés)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X PATCH "repos/${{ github.repository }}/releases/${{ steps.tauri.outputs.releaseId }}" \
+            -F draft=false -f make_latest=true --jq '.html_url'
