@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Local, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State};
@@ -51,6 +51,9 @@ pub struct Session {
     games: Vec<Game>,
     #[serde(default)]
     current: Counters,
+    /// Dernière action sur la session en cours (compteur, validation, sélection)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_activity: Option<String>,
 }
 
 /// Raccourcis clavier globaux ("" = désactivé)
@@ -169,6 +172,26 @@ struct AppState {
 //   sessions\<id>.json
 
 const EVT_SESSIONS: &str = "sessions-changed";
+/// Au-delà de ce délai sans activité, le prochain kill / mort / assist ouvre une nouvelle session
+const NEW_SESSION_AFTER_HOURS: i64 = 6;
+const TIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S";
+
+fn now_string() -> String {
+    Local::now().format(TIME_FORMAT).to_string()
+}
+
+/// La session est-elle « d'hier » (aucune activité depuis plus de NEW_SESSION_AFTER_HOURS) ?
+fn is_stale(session: &Session, now: NaiveDateTime) -> bool {
+    let last = session
+        .last_activity
+        .as_deref()
+        .or_else(|| session.games.last().map(|g| g.timestamp.as_str()))
+        .unwrap_or(&session.started_at);
+    match NaiveDateTime::parse_from_str(last, TIME_FORMAT) {
+        Ok(t) => now - t > chrono::Duration::hours(NEW_SESSION_AFTER_HOURS),
+        Err(_) => false,
+    }
+}
 const EVT_ACTIVE: &str = "active-session-changed";
 
 fn data_dir<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -284,6 +307,7 @@ fn create_session_locked<R: Runtime>(app: &AppHandle<R>) -> Result<Session, Stri
         note: None,
         games: Vec::new(),
         current: Counters::default(),
+        last_activity: Some(now.format(TIME_FORMAT).to_string()),
     };
     write_json(&session_path(app, &session.id)?, &session)?;
     set_active_id(app, Some(session.id.clone()))?;
@@ -302,11 +326,13 @@ fn update_active<R: Runtime>(
         Some(id) => read_session(app, &id)?,
         None => None,
     };
+    // Pas de session en cours, ou session restée inactive depuis la veille : on en ouvre une nouvelle
     let mut session = match existing {
-        Some(s) => s,
-        None => create_session_locked(app)?,
+        Some(s) if !is_stale(&s, Local::now().naive_local()) => s,
+        _ => create_session_locked(app)?,
     };
     change(&mut session);
+    session.last_activity = Some(now_string());
     write_json(&session_path(app, &session.id)?, &session)?;
     let _ = app.emit(EVT_ACTIVE, ());
     let _ = app.emit(EVT_SESSIONS, ());
@@ -341,7 +367,7 @@ fn validate_game_inner<R: Runtime>(app: &AppHandle<R>, state: &AppState) -> Resu
             extracted: None,
             bounty: None,
             mmr_stars: previous.and_then(|g| g.mmr_stars),
-            timestamp: Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
+            timestamp: now_string(),
         });
     })
 }
@@ -513,9 +539,11 @@ fn get_active_session(app: AppHandle) -> Result<Option<Session>, String> {
 fn set_active_session(app: AppHandle, state: State<'_, AppState>, id: Option<String>) -> Result<(), String> {
     let _guard = state.io.lock().map_err(|e| e.to_string())?;
     if let Some(id) = &id {
-        if !session_path(&app, id)?.exists() {
-            return Err(format!("Session introuvable : {id}"));
-        }
+        // Choisir une ancienne session la « réveille » : elle ne sera pas remplacée au prochain kill
+        let mut session = read_session(&app, id)?.ok_or_else(|| format!("Session introuvable : {id}"))?;
+        session.last_activity = Some(now_string());
+        write_json(&session_path(&app, id)?, &session)?;
+        let _ = app.emit(EVT_SESSIONS, ());
     }
     set_active_id(&app, id)
 }

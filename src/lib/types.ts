@@ -34,6 +34,8 @@ export interface Session {
   note?: string;
   games: Game[];
   current: Counters;
+  /** Dernière action sur la session (compteur, validation, sélection) */
+  lastActivity?: string;
 }
 
 /** Raccourcis clavier globaux, au format "F8", "Ctrl+Shift+K"… ("" = désactivé) */

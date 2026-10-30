@@ -19,6 +19,7 @@
     validateGame,
   } from "../lib/storage";
   import { detailsOf } from "../lib/hunt";
+  import { isStale } from "../lib/sessions";
   import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
   import { sessionTotals, kda } from "../lib/stats";
   import { dur, sleep } from "../lib/motion";
@@ -35,7 +36,12 @@
 
   // ---------- Données ----------
   let active = $state<Session | null>(null);
-  const current = $derived(active?.current ?? { kills: 0, deaths: 0, assists: 0 });
+  // Session restée inactive depuis la veille : elle sera remplacée au premier kill, on l'affiche comme « pas de session »
+  let now = $state(new Date());
+  const stale = $derived(active ? isStale(active, now) : false);
+  const current = $derived(
+    (!stale && active?.current) || { kills: 0, deaths: 0, assists: 0 },
+  );
   const sessionKda = $derived(active ? kda(sessionTotals(active)) : 0);
 
   const stats: { key: Stat; label: string; title: string }[] = [
@@ -280,6 +286,7 @@
 
   onMount(() => {
     refresh();
+    const clock = setInterval(() => (now = new Date()), 60_000);
     loadPreferences();
     const offs = [
       onActiveSessionChanged(refresh),
@@ -290,6 +297,7 @@
     return () => {
       clearTimeout(saveTimer);
       clearTimeout(drawerTimer);
+      clearInterval(clock);
       offs.forEach((p) => p.then((f) => f()));
     };
   });
@@ -311,13 +319,19 @@
     <!-- data-tauri-drag-region : cliquer-glisser sur la barre déplace la fenêtre -->
     <div class="bar" class:flash data-tauri-drag-region>
       <div class="top" data-tauri-drag-region>
-        {#if active}
+        {#if active && !stale}
           <span class="title" data-tauri-drag-region>{active.name}</span>
           <span class="kda" data-tauri-drag-region title="KDA de la session">
             KDA <AnimatedNumber value={sessionKda} decimals={2} />
           </span>
         {:else}
-          <button class="new" title="Créer la session du jour" onclick={() => safe(createSession)}>＋ Nouvelle session</button>
+          <button
+            class="new"
+            title={stale
+              ? "La dernière session est inactive depuis plus de 6 h : une nouvelle commencera au premier kill"
+              : "Créer la session du jour"}
+            onclick={() => safe(createSession)}>＋ Nouvelle session</button
+          >
         {/if}
         <div class="win">
           <button
