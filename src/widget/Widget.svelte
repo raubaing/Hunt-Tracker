@@ -6,7 +6,14 @@
   import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
   import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
   import type { Session, Stat, Tab } from "../lib/types";
-  import { addStat, createSession, getActiveSession, onActiveSessionChanged, validateGame } from "../lib/storage";
+  import {
+    addStat,
+    createSession,
+    getActiveSession,
+    onActiveSessionChanged,
+    saveWidgetPosition,
+    validateGame,
+  } from "../lib/storage";
   import { sessionTotals, kda } from "../lib/stats";
   import { dur, sleep } from "../lib/motion";
   import AnimatedNumber from "../lib/AnimatedNumber.svelte";
@@ -141,6 +148,9 @@
 
   // Ferme la fenêtre : l'appli s'arrête
   async function quit() {
+    // Enregistre tout de suite un déplacement récent avant de fermer
+    clearTimeout(saveTimer);
+    await pendingSave?.();
     await win.destroy();
   }
 
@@ -148,10 +158,33 @@
     if (e.key === "Escape" && expanded) collapse();
   }
 
+  // ---------- Position mémorisée ----------
+  // On enregistre la position de la barre (et non de la fenêtre agrandie), un peu après
+  // la fin du déplacement pour ne pas écrire le fichier en continu.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingSave: (() => Promise<void>) | null = null;
+
+  function onMoved(pos: { x: number; y: number }) {
+    clearTimeout(saveTimer);
+    pendingSave = async () => {
+      pendingSave = null;
+      try {
+        const sf = await win.scaleFactor();
+        await saveWidgetPosition(pos.x + offset.x * sf, pos.y + offset.y * sf);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    saveTimer = setTimeout(() => pendingSave?.(), 500);
+  }
+
   onMount(() => {
     refresh();
-    const off = onActiveSessionChanged(refresh);
-    return () => off.then((f) => f());
+    const offs = [onActiveSessionChanged(refresh), win.onMoved(({ payload }) => onMoved(payload))];
+    return () => {
+      clearTimeout(saveTimer);
+      offs.forEach((p) => p.then((f) => f()));
+    };
   });
 </script>
 

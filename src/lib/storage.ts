@@ -19,6 +19,9 @@ export const validateGame = () => invoke<Session>("validate_game");
 // Options
 export const getSettings = () => invoke<Settings>("get_settings");
 export const setShortcuts = (shortcuts: Shortcuts) => invoke<void>("set_shortcuts", { shortcuts });
+/** Mémorise la position de la barre du widget (pixels physiques) */
+export const saveWidgetPosition = (x: number, y: number) =>
+  invoke<void>("save_widget_position", { x: Math.round(x), y: Math.round(y) });
 /** Coupe les raccourcis globaux pendant qu'on saisit une nouvelle touche */
 export const pauseShortcuts = (paused: boolean) => invoke<void>("pause_shortcuts", { paused });
 

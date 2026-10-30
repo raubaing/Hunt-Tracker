@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Runtime, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 // ---------- Modèle de données (miroir de src/lib/types.ts) ----------
@@ -74,6 +74,13 @@ impl Default for Shortcuts {
     }
 }
 
+/// Position de la barre du widget à l'écran, en pixels physiques
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+struct WidgetPosition {
+    x: i32,
+    y: i32,
+}
+
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Config {
@@ -81,6 +88,8 @@ struct Config {
     active_session_id: Option<String>,
     #[serde(default)]
     shortcuts: Shortcuts,
+    #[serde(default)]
+    widget_position: Option<WidgetPosition>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -478,6 +487,34 @@ fn pause_shortcuts(app: AppHandle, state: State<'_, AppState>, paused: bool) -> 
     }
 }
 
+/// Mémorise la position de la barre du widget (appelé après un déplacement).
+#[tauri::command]
+fn save_widget_position(app: AppHandle, state: State<'_, AppState>, x: i32, y: i32) -> Result<(), String> {
+    let _guard = state.io.lock().map_err(|e| e.to_string())?;
+    let mut config = read_config(&app);
+    config.widget_position = Some(WidgetPosition { x, y });
+    write_config(&app, &config)
+}
+
+/// Replace le widget à sa dernière position, si elle est toujours sur un écran branché,
+/// puis l'affiche (il est masqué au lancement pour éviter qu'il « saute »).
+fn restore_widget_position<R: Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window("widget") else { return };
+    if let Some(pos) = read_config(app).widget_position {
+        let monitors = window.available_monitors().unwrap_or_default();
+        // On vérifie qu'un petit carré en haut à gauche de la barre est visible sur un écran
+        let visible = monitors.iter().any(|m| {
+            let (mx, my) = (m.position().x, m.position().y);
+            let (mw, mh) = (m.size().width as i32, m.size().height as i32);
+            pos.x + 40 > mx && pos.x + 40 < mx + mw && pos.y + 20 > my && pos.y + 20 < my + mh
+        });
+        if visible {
+            let _ = window.set_position(PhysicalPosition::new(pos.x, pos.y));
+        }
+    }
+    let _ = window.show();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -500,6 +537,7 @@ pub fn run() {
                     *err = Some(e);
                 }
             }
+            restore_widget_position(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -513,7 +551,8 @@ pub fn run() {
             validate_game,
             get_settings,
             set_shortcuts,
-            pause_shortcuts
+            pause_shortcuts,
+            save_widget_position
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Hunt Tracker");
