@@ -800,6 +800,101 @@ fn restore_widget_position<R: Runtime>(app: &AppHandle<R>) {
     let _ = window.show();
 }
 
+// ---------- Export CSV ----------
+
+/// Échappe un champ CSV (séparateur « ; » pour Excel en français)
+fn csv_field(value: &str) -> String {
+    if value.contains([';', '"', '\n', '\r']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
+/// « 2026-10-30T21:05:00 » → (« 30/10/2026 », « 21:05 »)
+fn split_datetime(iso: &str) -> (String, String) {
+    match NaiveDateTime::parse_from_str(iso, TIME_FORMAT) {
+        Ok(t) => (t.format("%d/%m/%Y").to_string(), t.format("%H:%M").to_string()),
+        Err(_) => (iso.to_string(), String::new()),
+    }
+}
+
+fn yes_no(v: Option<bool>) -> &'static str {
+    match v {
+        Some(true) => "Oui",
+        Some(false) => "Non",
+        None => "",
+    }
+}
+
+/// Une ligne par game validée, sessions de la plus ancienne à la plus récente.
+/// Format Excel français : « ; », virgule décimale, BOM UTF-8, fins de ligne Windows.
+fn sessions_to_csv(sessions: &[Session]) -> String {
+    let mut sorted: Vec<&Session> = sessions.iter().collect();
+    sorted.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+    let header = [
+        "Session", "Date", "Game", "Heure", "Kills", "Assists", "Morts", "KDA", "Format", "Map",
+        "Extraction", "Bounty", "Étoiles", "Coéquipiers", "Note de session",
+    ];
+    let mut out = String::from("\u{feff}");
+    out.push_str(&header.join(";"));
+    out.push_str("\r\n");
+    for session in sorted {
+        let (date, _) = split_datetime(&session.started_at);
+        for (i, g) in session.games.iter().enumerate() {
+            let (_, time) = split_datetime(&g.timestamp);
+            let kda = (g.kills + g.assists) as f64 / g.deaths.max(1) as f64;
+            let format = match g.team_size {
+                Some(1) => "Solo",
+                Some(2) => "Duo",
+                Some(3) => "Trio",
+                _ => "",
+            };
+            let row = [
+                csv_field(&session.name),
+                date.clone(),
+                (i + 1).to_string(),
+                time,
+                g.kills.to_string(),
+                g.assists.to_string(),
+                g.deaths.to_string(),
+                format!("{kda:.2}").replace('.', ","),
+                format.to_string(),
+                csv_field(g.map.as_deref().unwrap_or("")),
+                yes_no(g.extracted).to_string(),
+                yes_no(g.bounty).to_string(),
+                g.mmr_stars.map(|n| n.to_string()).unwrap_or_default(),
+                csv_field(&session.teammates.join(", ")),
+                csv_field(session.note.as_deref().unwrap_or("")),
+            ];
+            out.push_str(&row.join(";"));
+            out.push_str("\r\n");
+        }
+    }
+    out
+}
+
+/// Demande où enregistrer puis écrit le CSV. Renvoie le chemin, ou None si annulé.
+#[tauri::command]
+async fn export_csv(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let sessions = read_all_sessions(&app)?;
+    let file_name = format!("hunt-tracker-{}.csv", Local::now().format("%Y-%m-%d"));
+    let Some(path) = app
+        .dialog()
+        .file()
+        .set_title("Exporter les games en CSV")
+        .set_file_name(file_name)
+        .add_filter("Fichier CSV", &["csv"])
+        .blocking_save_file()
+    else {
+        return Ok(None);
+    };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    fs::write(&path, sessions_to_csv(&sessions)).map_err(|e| format!("Impossible d'écrire le fichier : {e}"))?;
+    Ok(Some(path.display().to_string()))
+}
+
 // ---------- Icône dans la barre des tâches système (zone de notification) ----------
 
 fn toggle_widget<R: Runtime>(app: &AppHandle<R>) {
@@ -853,6 +948,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -898,7 +994,8 @@ pub fn run() {
             set_shortcuts,
             pause_shortcuts,
             save_widget_position,
-            save_panel_size
+            save_panel_size,
+            export_csv
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Hunt Tracker");

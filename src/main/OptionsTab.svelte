@@ -4,7 +4,7 @@
   import { fade } from "svelte/transition";
   import { dur } from "../lib/motion";
   import type { Preferences, Shortcuts } from "../lib/types";
-  import { getSettings, setShortcuts, pauseShortcuts, setPreferences } from "../lib/storage";
+  import { getSettings, setShortcuts, pauseShortcuts, setPreferences, exportCsv } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
 
   const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11", toggle: "F7" };
@@ -92,6 +92,24 @@
       setTimeout(() => (saved = false), 2000);
     } catch (e) {
       error = String(e);
+    }
+  }
+
+  // ---------- Données ----------
+  let dataMessage = $state<string | null>(null);
+  let exporting = $state(false);
+
+  async function doExport() {
+    error = null;
+    dataMessage = null;
+    exporting = true;
+    try {
+      const path = await exportCsv();
+      if (path) dataMessage = `Exporté : ${path}`;
+    } catch (e) {
+      error = String(e);
+    } finally {
+      exporting = false;
     }
   }
 
@@ -197,6 +215,17 @@
     Le tiroir s'ouvre sous le widget et se referme tout seul dès que la game suivante commence. Les infos restent
     modifiables dans l'onglet Sessions (bouton ✎).
   </p>
+
+  <h2 class="section">Données</h2>
+  <div class="data-actions">
+    <button onclick={doExport} disabled={exporting}>{exporting ? "Export…" : "Exporter en CSV"}</button>
+  </div>
+  {#if dataMessage}
+    <p class="data-message" transition:fade={{ duration: dur(200) }}>✓ {dataMessage}</p>
+  {/if}
+  <p class="help">
+    Une ligne par game (toutes les sessions), prête à ouvrir dans Excel : séparateur « ; » et virgule décimale.
+  </p>
 </div>
 </div>
 
@@ -225,6 +254,9 @@
   .footer button { padding: 6px 12px; }
   .saved { color: #7fbf7f; font-size: 13px; }
   .section { margin-top: 28px; }
+  .data-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .data-actions button { padding: 6px 12px; }
+  .data-message { color: #8fc98f; font-size: 13px; word-break: break-all; margin: 8px 0 0; }
   .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .check input { accent-color: var(--accent); width: 16px; height: 16px; }
   kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 12px; }
