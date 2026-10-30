@@ -15,7 +15,7 @@
         "label": "widget",
         "title": "Hunt Tracker",
         "url": "widget.html",
-        "width": 260,
+        "width": 290,
         "height": 60,
         "decorations": false,
         "transparent": true,

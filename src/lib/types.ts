@@ -1,4 +1,4 @@
-// Modèle de données (à compléter lors du développement des fonctionnalités)
+// Modèle de données (miroir des structs Rust dans src-tauri/src/lib.rs)
 
 export type GameMode = "bounty" | "clash";
 export type TeamSize = 1 | 2 | 3;
@@ -14,11 +14,12 @@ export interface Game {
   extracted?: boolean;
   bounty?: boolean;
   mmrStars?: number;
-  timestamp: string; // ISO 8601
+  timestamp: string; // date locale ISO, ex. "2026-10-30T21:32:00"
 }
 
 export interface Session {
-  id: string; // ex. "2026-10-30_2105"
+  id: string; // ex. "2026-10-30_210512" (sert aussi de nom de fichier)
+  name: string; // ex. "Session du 30/10/26"
   startedAt: string;
   endedAt?: string;
   note?: string;
