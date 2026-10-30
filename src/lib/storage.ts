@@ -12,6 +12,9 @@ export const deleteSession = (id: string) => invoke<void>("delete_session", { id
 export const getActiveSession = () => invoke<Session | null>("get_active_session");
 /** Note libre d'une session (chaîne vide = supprimer la note) */
 export const setSessionNote = (id: string, note: string) => invoke<Session>("set_session_note", { id, note });
+/** Coéquipiers d'une session (la liste est nettoyée côté Rust) */
+export const setSessionTeammates = (id: string, teammates: string[]) =>
+  invoke<Session>("set_session_teammates", { id, teammates });
 export const setActiveSession = (id: string | null) => invoke<void>("set_active_session", { id });
 
 // Game en cours (une session est créée automatiquement s'il n'y en a pas)

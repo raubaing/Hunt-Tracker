@@ -8,6 +8,8 @@
     summarize,
     kdaBySession,
     kdaByMap,
+    kdaByTeammate,
+    NO_TEAMMATE,
     records,
     sessionDuration,
     formatDuration,
@@ -22,7 +24,7 @@
 
   let sessions = $state<Session[]>([]);
   let error = $state<string | null>(null);
-  let filter = $state<StatsFilter>({ period: "all", teamSize: null, map: null });
+  let filter = $state<StatsFilter>({ period: "all", teamSize: null, map: null, teammate: null });
 
   const PERIODS: { value: Period; label: string }[] = [
     { value: "7d", label: "7 jours" },
@@ -34,10 +36,18 @@
   const sum = $derived(summarize(refs));
   const bySession = $derived(kdaBySession(refs));
   const byMap = $derived(kdaByMap(refs));
+  const byMate = $derived(kdaByTeammate(refs));
+  // Coéquipiers connus (pour le filtre), les plus fréquents d'abord
+  const mates = $derived.by(() => {
+    const count = new Map<string, number>();
+    for (const s of sessions) for (const t of s.teammates ?? []) count.set(t, (count.get(t) ?? 0) + 1);
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  });
+  const hasMates = $derived(byMate.some((m) => m.name !== NO_TEAMMATE));
   const rec = $derived(records(refs));
   // Temps de jeu estimé (début de session → dernière game), uniquement sans filtre format / map
   const playTime = $derived.by(() => {
-    if (filter.teamSize !== null || filter.map !== null) return null;
+    if (filter.teamSize !== null || filter.map !== null || filter.teammate !== null) return null;
     const ids = new Set(refs.map((r) => r.session.id));
     return sessions.filter((s) => ids.has(s.id)).reduce((t, s) => t + (sessionDuration(s) ?? 0), 0);
   });
@@ -83,6 +93,18 @@
         <button class:on={filter.map === m.name} title={m.name} onclick={() => (filter.map = m.name)}>{m.short}</button>
       {/each}
     </div>
+    {#if mates.length}
+      <select
+        class="mate-select"
+        class:on={filter.teammate !== null}
+        value={filter.teammate ?? ""}
+        onchange={(e) => (filter.teammate = e.currentTarget.value || null)}
+        aria-label="Coéquipier"
+      >
+        <option value="">Tous coéquipiers</option>
+        {#each mates as m (m)}<option value={m}>Avec {m}</option>{/each}
+      </select>
+    {/if}
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
@@ -90,8 +112,8 @@
   {#if sum.games === 0}
     <p class="empty">
       Aucune game pour ces filtres.
-      {#if filter.teamSize !== null || filter.map !== null}
-        Les filtres format et map ne comptent que les games où l'info a été renseignée.
+      {#if filter.teamSize !== null || filter.map !== null || filter.teammate !== null}
+        Les filtres ne comptent que les games où l'info (format, map, coéquipiers) a été renseignée.
       {/if}
     </p>
   {:else}
@@ -185,6 +207,19 @@
           </li>
         </ul>
       </section>
+
+      {#if hasMates}
+        <section class="card wide">
+          <h3>KDA par coéquipier</h3>
+          <BarChart
+            bars={byMate.map((m) => ({
+              label: m.name,
+              value: m.kda,
+              tooltip: [`KDA ${formatKda(m.kda)}`, m.name === NO_TEAMMATE ? m.name : `Avec ${m.name}`, `${plural(m.games, "game")} · ${m.kills} K · ${m.assists} A · ${m.deaths} D`],
+            }))}
+          />
+        </section>
+      {/if}
     </div>
   {/if}
 </div>
@@ -198,6 +233,11 @@
   .group button:hover { color: var(--text); }
   .group button.on { background: var(--accent); color: #fff; }
   .group button:active { transform: none; }
+  .mate-select {
+    font: inherit; font-size: 13px; color: var(--muted); padding: 5px 8px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  }
+  .mate-select.on { color: #fff; background: var(--accent); border-color: var(--accent); }
 
   .tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
   .tiles div {

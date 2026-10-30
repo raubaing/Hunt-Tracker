@@ -54,6 +54,9 @@ pub struct Session {
     /// Dernière action sur la session en cours (compteur, validation, sélection)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_activity: Option<String>,
+    /// Coéquipiers de la session (tags)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    teammates: Vec<String>,
 }
 
 /// Raccourcis clavier globaux ("" = désactivé)
@@ -320,6 +323,7 @@ fn create_session_locked<R: Runtime>(app: &AppHandle<R>) -> Result<Session, Stri
         games: Vec::new(),
         current: Counters::default(),
         last_activity: Some(now.format(TIME_FORMAT).to_string()),
+        teammates: Vec::new(),
     };
     write_json(&session_path(app, &session.id)?, &session)?;
     set_active_id(app, Some(session.id.clone()))?;
@@ -645,6 +649,42 @@ fn set_session_note(app: AppHandle, state: State<'_, AppState>, id: String, note
     })
 }
 
+/// Nettoie une liste de coéquipiers : espaces, doublons (sans tenir compte de la casse), limites
+fn normalize_teammates(raw: Vec<String>) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = Vec::new();
+    for name in raw {
+        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if name.is_empty() {
+            continue;
+        }
+        if name.chars().count() > 30 {
+            return Err(format!("Nom trop long (30 caractères maximum) : {name}"));
+        }
+        if !out.iter().any(|n| n.to_lowercase() == name.to_lowercase()) {
+            out.push(name);
+        }
+    }
+    if out.len() > 10 {
+        return Err("10 coéquipiers maximum".into());
+    }
+    Ok(out)
+}
+
+/// Coéquipiers d'une session
+#[tauri::command]
+fn set_session_teammates(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    teammates: Vec<String>,
+) -> Result<Session, String> {
+    let teammates = normalize_teammates(teammates)?;
+    update_session(&app, &state, &id, |s| {
+        s.teammates = teammates;
+        Ok(())
+    })
+}
+
 #[tauri::command]
 fn set_preferences(app: AppHandle, state: State<'_, AppState>, preferences: Preferences) -> Result<(), String> {
     let _guard = state.io.lock().map_err(|e| e.to_string())?;
@@ -852,6 +892,7 @@ pub fn run() {
             restore_game,
             set_game_details,
             set_session_note,
+            set_session_teammates,
             set_preferences,
             get_settings,
             set_shortcuts,

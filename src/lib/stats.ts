@@ -31,6 +31,7 @@ export interface StatsFilter {
   period: Period;
   teamSize: number | null; // null = tous
   map: string | null; // null = toutes
+  teammate: string | null; // null = tous
 }
 
 /** Une game avec la session à laquelle elle appartient */
@@ -50,6 +51,7 @@ export function filterGames(sessions: Session[], f: StatsFilter, now = new Date(
     for (const game of session.games) {
       if (f.teamSize !== null && game.teamSize !== f.teamSize) continue;
       if (f.map !== null && game.map !== f.map) continue;
+      if (f.teammate !== null && !(session.teammates ?? []).includes(f.teammate)) continue;
       refs.push({ game, session });
     }
   }
@@ -126,6 +128,25 @@ export function kdaByMap(refs: GameRef[]) {
     byMap.set(g.map, t);
   }
   return [...byMap.entries()].map(([map, t]) => ({ map, ...t, kda: kda(t) })).sort((a, b) => b.kda - a.kda);
+}
+
+export const NO_TEAMMATE = "Sans coéquipier";
+
+/** KDA avec chaque coéquipier (d'après les coéquipiers renseignés sur la session) */
+export function kdaByTeammate(refs: GameRef[]) {
+  const byMate = new Map<string, { kills: number; deaths: number; assists: number; games: number }>();
+  for (const { game: g, session } of refs) {
+    const mates = session.teammates?.length ? session.teammates : [NO_TEAMMATE];
+    for (const m of mates) {
+      const t = byMate.get(m) ?? { kills: 0, deaths: 0, assists: 0, games: 0 };
+      t.kills += g.kills;
+      t.deaths += g.deaths;
+      t.assists += g.assists;
+      t.games++;
+      byMate.set(m, t);
+    }
+  }
+  return [...byMate.entries()].map(([name, t]) => ({ name, ...t, kda: kda(t) })).sort((a, b) => b.kda - a.kda);
 }
 
 export interface Records {

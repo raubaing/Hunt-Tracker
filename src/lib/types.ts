@@ -36,6 +36,8 @@ export interface Session {
   current: Counters;
   /** Dernière action sur la session (compteur, validation, sélection) */
   lastActivity?: string;
+  /** Coéquipiers de la session */
+  teammates?: string[];
 }
 
 /** Raccourcis clavier globaux, au format "F8", "Ctrl+Shift+K"… ("" = désactivé) */

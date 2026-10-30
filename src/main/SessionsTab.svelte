@@ -10,6 +10,7 @@
   import { detailsOf, mapShort, teamLabel } from "../lib/hunt";
   import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
   import UndoToast, { type UndoMessage } from "../lib/UndoToast.svelte";
+  import TagInput from "../lib/TagInput.svelte";
   import {
     listSessions,
     createSession,
@@ -24,6 +25,7 @@
     saveSession,
     setGameDetails,
     setSessionNote,
+    setSessionTeammates,
     onSessionsChanged,
     onActiveSessionChanged,
   } from "../lib/storage";
@@ -129,6 +131,20 @@
       offerUndo(`Game ${index + 1} supprimée`, () => restoreGame(sessionId, backup, index));
     });
 
+  // ---------- Coéquipiers ----------
+  // Tous les noms déjà utilisés, les plus fréquents d'abord (suggestions)
+  const knownTeammates = $derived.by(() => {
+    const count = new Map<string, number>();
+    for (const s of sessions) for (const t of s.teammates ?? []) count.set(t, (count.get(t) ?? 0) + 1);
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  });
+
+  const saveTeammates = (tags: string[]) => {
+    if (!selected) return;
+    const id = selected.id;
+    run(() => setSessionTeammates(id, tags));
+  };
+
   // ---------- Note libre (enregistrée automatiquement) ----------
   let noteDraft = $state("");
   let noteFor = "";
@@ -191,6 +207,7 @@
           >
             <button class="item" class:selected={s.id === selectedId} onclick={() => (selectedId = s.id)}>
               <span class="name">{s.name}</span>
+              {#if s.teammates?.length}<span class="mates-preview">avec {s.teammates.join(", ")}</span>{/if}
               {#if s.note}<span class="note-preview">{s.note}</span>{/if}
               <span class="meta">
                 {#if s.id === activeId}<span class="dot" title="Session en cours"></span>{/if}
@@ -230,6 +247,16 @@
           <button onclick={() => remove(selected.id)}>Supprimer</button>
         </div>
       </header>
+
+      <div class="mates">
+        <span class="mates-label">Coéquipiers</span>
+        <TagInput
+          tags={selected.teammates ?? []}
+          suggestions={knownTeammates}
+          placeholder="Ajoute un pseudo puis Entrée (laisse vide si tu joues solo)"
+          onchange={saveTeammates}
+        />
+      </div>
 
       <div class="note">
         <textarea
@@ -349,7 +376,10 @@
     color: var(--muted); font-size: 12px; font-style: italic;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .note { position: relative; margin-top: 16px; }
+  .mates-preview { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mates { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 16px; }
+  .mates-label { color: var(--muted); font-size: 13px; }
+  .note { position: relative; margin-top: 10px; }
   .note textarea {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 44px;
     font: inherit; font-size: 14px; color: var(--text);
