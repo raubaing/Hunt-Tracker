@@ -366,7 +366,10 @@
     <div class="bar" class:flash data-tauri-drag-region={dragRegion}>
       <div class="top" data-tauri-drag-region={dragRegion}>
         {#if active && !stale}
-          <span class="title" data-tauri-drag-region={dragRegion}>{active.name}</span>
+          <span class="title" data-tauri-drag-region={dragRegion} title={active.name}>{active.name.replace(/^Session du /, "")}</span>
+          <span class="game-no" data-tauri-drag-region={dragRegion} title="Numéro de la game en cours">
+            Game {active.games.length + 1}
+          </span>
           <span class="kda" data-tauri-drag-region={dragRegion} title="KDA de la session">
             KDA <AnimatedNumber value={sessionKda} decimals={2} />
           </span>
@@ -485,6 +488,10 @@
   .bar.flash { animation: flash 700ms ease-out; }
   .top { display: flex; align-items: center; gap: 8px; }
   .title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .game-no {
+    font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: 8px; padding: 0 6px;
+  }
   .kda { font-size: 12px; color: var(--muted); white-space: nowrap; margin-left: auto; font-variant-numeric: tabular-nums; }
   .new { padding: 1px 8px; font-size: 12px; margin-right: auto; }
   .win { display: flex; gap: 4px; flex-shrink: 0; }
