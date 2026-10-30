@@ -117,14 +117,27 @@
     drawerTimer = setTimeout(closeDrawer, DRAWER_AUTOCLOSE_MS);
   }
 
+  // Le tiroir s'ouvre vers le haut quand il n'y a pas la place sous la barre
+  let drawerUp = $state(false);
+
   async function openDrawer(gameId: number) {
     drawerGameId = gameId;
     armDrawerTimer();
     if (drawerOpen || resizing || busy || expanded) return;
     resizing = true;
     try {
+      const bar = await barPosition();
+      const area = await workArea();
+      const up = area !== null && bar.y + BAR.h + DRAWER_H > area.y + area.h;
       animate = false;
       await win.setSize(new LogicalSize(BAR.w, BAR.h + DRAWER_H));
+      if (up) {
+        // La fenêtre remonte de la hauteur du tiroir ; la barre reste au même endroit à l'écran
+        drawerUp = true;
+        offset = { x: 0, y: DRAWER_H };
+        await tick();
+        await win.setPosition(new LogicalPosition(bar.x, bar.y - DRAWER_H));
+      }
       await tick();
       await frame();
       animate = true;
@@ -145,7 +158,7 @@
       animate = true;
       drawerOpen = false;
       await sleep(dur(ANIM_MS));
-      if (!expanded && !busy) await win.setSize(new LogicalSize(BAR.w, BAR.h));
+      if (!expanded && !busy) await snapToBar();
     } catch (e) {
       console.error(e);
     } finally {
@@ -171,28 +184,55 @@
 
   const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
+  /** Position de la barre à l'écran (coordonnées logiques) */
+  async function barPosition() {
+    const sf = await win.scaleFactor();
+    const pos = (await win.outerPosition()).toLogical(sf);
+    return { x: pos.x + offset.x, y: pos.y + offset.y };
+  }
+
+  /** Zone utile de l'écran du widget (sans la barre des tâches), en coordonnées logiques */
+  async function workArea() {
+    const mon = await currentMonitor();
+    if (!mon) return null;
+    const a = mon.workArea;
+    const f = mon.scaleFactor;
+    return { x: a.position.x / f, y: a.position.y / f, w: a.size.width / f, h: a.size.height / f };
+  }
+
+  /** Ramène la fenêtre à la taille de la barre seule, à la position de la barre */
+  async function snapToBar() {
+    animate = false;
+    if (offset.x !== 0 || offset.y !== 0) {
+      const bar = await barPosition();
+      offset = { x: 0, y: 0 };
+      drawerUp = false;
+      await tick();
+      await win.setPosition(new LogicalPosition(bar.x, bar.y));
+    }
+    drawerUp = false;
+    await win.setSize(new LogicalSize(BAR.w, BAR.h));
+  }
+
   async function expand() {
     if (busy || expanded) return;
     busy = true;
     // Le tiroir disparaît : ses infos restent modifiables dans le panneau
     clearTimeout(drawerTimer);
-    drawerOpen = false;
     try {
-      const sf = await win.scaleFactor();
-      const pos = (await win.outerPosition()).toLogical(sf);
+      if (drawerOpen) {
+        drawerOpen = false;
+        await snapToBar();
+      }
+      const pos = await barPosition();
 
       // Si le panneau dépasse de l'écran, on décale la fenêtre ; la barre garde sa place à l'écran
       let x = pos.x;
       let y = pos.y;
-      const mon = await currentMonitor();
-      if (mon) {
-        const area = mon.workArea;
-        const ax = area.position.x / mon.scaleFactor;
-        const ay = area.position.y / mon.scaleFactor;
-        const aw = area.size.width / mon.scaleFactor;
-        const ah = area.size.height / mon.scaleFactor;
-        x = Math.max(ax, Math.min(pos.x, ax + aw - PANEL.w));
-        y = Math.max(ay, Math.min(pos.y, ay + ah - PANEL.h));
+      const area = await workArea();
+      if (area) {
+        x = Math.max(area.x, Math.min(pos.x, area.x + area.w - PANEL.w));
+        y = Math.max(area.y, Math.min(pos.y, area.y + area.h - PANEL.h));
       }
 
       animate = false;
@@ -309,8 +349,9 @@
   class="card"
   class:expanded
   class:animate
+  class:up={drawerUp && !expanded}
   style:left="{expanded ? 0 : offset.x}px"
-  style:top="{expanded ? 0 : offset.y}px"
+  style:top="{expanded ? 0 : offset.y - (drawerOpen && drawerUp ? DRAWER_H : 0)}px"
   style:width="{expanded ? PANEL.w : BAR.w}px"
   style:height="{expanded ? PANEL.h : BAR.h + (drawerOpen ? DRAWER_H : 0)}px"
   style:--anim="{dur(ANIM_MS)}ms"
@@ -477,6 +518,10 @@
     transition: opacity 180ms ease, transform 240ms ease;
   }
   .drawer.visible { opacity: 1; transform: none; transition-delay: 100ms; }
+  /* Tiroir au-dessus de la barre */
+  .card.up { flex-direction: column-reverse; }
+  .card.up .drawer { border-top: none; border-bottom: 1px solid var(--border); transform: translateY(6px); }
+  .card.up .drawer.visible { transform: none; }
   .drawer-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; }
   .drawer-head em { color: var(--muted); font-weight: 400; font-style: normal; }
   .ok { padding: 0 10px; font-size: 12px; }
