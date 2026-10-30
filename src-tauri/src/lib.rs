@@ -592,6 +592,19 @@ fn set_game_details(
     })
 }
 
+/// Note libre d'une session (vide = pas de note)
+#[tauri::command]
+fn set_session_note(app: AppHandle, state: State<'_, AppState>, id: String, note: String) -> Result<Session, String> {
+    if note.chars().count() > 2000 {
+        return Err("Note trop longue (2000 caractères maximum)".into());
+    }
+    update_session(&app, &state, &id, |s| {
+        let trimmed = note.trim();
+        s.note = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
+        Ok(())
+    })
+}
+
 #[tauri::command]
 fn set_preferences(app: AppHandle, state: State<'_, AppState>, preferences: Preferences) -> Result<(), String> {
     let _guard = state.io.lock().map_err(|e| e.to_string())?;
@@ -713,6 +726,7 @@ pub fn run() {
             update_game,
             delete_game,
             set_game_details,
+            set_session_note,
             set_preferences,
             get_settings,
             set_shortcuts,

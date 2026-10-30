@@ -20,6 +20,7 @@
     updateGame,
     deleteGame,
     setGameDetails,
+    setSessionNote,
     onSessionsChanged,
     onActiveSessionChanged,
   } from "../lib/storage";
@@ -124,6 +125,44 @@
       await deleteGame(selected.id, id);
     });
 
+  // ---------- Note libre (enregistrée automatiquement) ----------
+  let noteDraft = $state("");
+  let noteFor = "";
+  let noteStatus = $state<"" | "saving" | "saved">("");
+  let noteTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    // Charge la note quand on change de session (sans écraser une saisie en cours)
+    if (selected && selected.id !== noteFor) {
+      noteFor = selected.id;
+      noteDraft = selected.note ?? "";
+      noteStatus = "";
+    }
+  });
+
+  function saveNoteNow(id: string, note: string) {
+    clearTimeout(noteTimer);
+    noteStatus = "saving";
+    run(async () => {
+      await setSessionNote(id, note);
+      noteStatus = "saved";
+      setTimeout(() => noteStatus === "saved" && (noteStatus = ""), 1500);
+    });
+  }
+
+  function onNoteInput() {
+    if (!selected) return;
+    const id = selected.id;
+    const note = noteDraft;
+    clearTimeout(noteTimer);
+    noteStatus = "saving";
+    noteTimer = setTimeout(() => saveNoteNow(id, note), 700);
+  }
+
+  function onNoteBlur() {
+    if (selected && noteStatus === "saving") saveNoteNow(selected.id, noteDraft);
+  }
+
   onMount(() => {
     refresh();
     const unlisteners = [onSessionsChanged(refresh), onActiveSessionChanged(refresh)];
@@ -147,6 +186,7 @@
           >
             <button class="item" class:selected={s.id === selectedId} onclick={() => (selectedId = s.id)}>
               <span class="name">{s.name}</span>
+              {#if s.note}<span class="note-preview">{s.note}</span>{/if}
               <span class="meta">
                 {#if s.id === activeId}<span class="dot" title="Session en cours"></span>{/if}
                 {s.games.length} game{s.games.length > 1 ? "s" : ""}
@@ -184,6 +224,20 @@
           {/if}
         </div>
       </header>
+
+      <div class="note">
+        <textarea
+          rows="2"
+          maxlength="2000"
+          placeholder="Note libre : avec qui tu joues, ce que tu testes, ton ressenti…"
+          bind:value={noteDraft}
+          oninput={onNoteInput}
+          onblur={onNoteBlur}
+        ></textarea>
+        <span class="note-status">
+          {noteStatus === "saving" ? "…" : noteStatus === "saved" ? "✓ Enregistré" : ""}
+        </span>
+      </div>
 
       <div class="stats">
         <div><span>Games</span><strong><AnimatedNumber value={selectedTotals.games} /></strong></div>
@@ -289,6 +343,20 @@
   .item:hover { background: var(--bg); border-color: var(--border); }
   .item.selected { background: var(--bg); border-color: var(--accent); }
   .name { font-weight: 600; }
+  .note-preview {
+    color: var(--muted); font-size: 12px; font-style: italic;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .note { position: relative; margin-top: 16px; }
+  .note textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 44px;
+    font: inherit; font-size: 14px; color: var(--text);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+    transition: border-color 150ms ease;
+  }
+  .note textarea:focus { outline: none; border-color: var(--accent); }
+  .note textarea::placeholder { color: var(--muted); opacity: 0.7; }
+  .note-status { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: #8fc98f; pointer-events: none; }
   .meta { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
@@ -297,7 +365,7 @@
   .actions { display: flex; gap: 8px; align-items: center; }
   .actions button { padding: 6px 12px; }
   .badge { color: var(--accent); font-weight: 600; }
-  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 24px 0; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 16px 0 24px; }
   .stats div {
     background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
     padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;

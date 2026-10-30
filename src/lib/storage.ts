@@ -10,6 +10,8 @@ export const createSession = () => invoke<Session>("create_session");
 export const saveSession = (session: Session) => invoke<void>("save_session", { session });
 export const deleteSession = (id: string) => invoke<void>("delete_session", { id });
 export const getActiveSession = () => invoke<Session | null>("get_active_session");
+/** Note libre d'une session (chaîne vide = supprimer la note) */
+export const setSessionNote = (id: string, note: string) => invoke<Session>("set_session_note", { id, note });
 export const setActiveSession = (id: string | null) => invoke<void>("set_active_session", { id });
 
 // Game en cours (une session est créée automatiquement s'il n'y en a pas)
