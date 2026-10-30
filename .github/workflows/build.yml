@@ -1,20 +1,17 @@
-# Compile Hunt Tracker pour Windows sur les serveurs GitHub.
-# - À chaque push sur main (ou lancement manuel) : le .exe est disponible
-#   dans l'onglet Actions > dernier run > "Artifacts".
-# - Sur un tag "v*" (ex. v0.1.0) : crée en plus une Release (brouillon) avec l'installeur.
+# Build de test : compile Hunt Tracker pour Windows à chaque push sur main.
+# Le .exe est dans l'onglet Actions > dernier run > "Artifacts" (HuntTracker-windows).
+# Pour publier une version (et la proposer en mise à jour automatique), lancer le workflow « Release ».
 name: Build
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
-# Un nouveau push annule le run encore en cours sur la même branche (ou le même tag) :
-# seule la dernière version compte.
+# Un nouveau push annule le run encore en cours : seule la dernière version compte.
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
@@ -35,12 +32,9 @@ jobs:
       - run: npm ci
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: "Hunt Tracker ${{ github.ref_name }}"
-          releaseBody: "Télécharge le fichier *-setup.exe ci-dessous pour installer."
-          releaseDraft: true
+          # Clé de signature des mises à jour (Settings > Secrets and variables > Actions)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: HuntTracker-windows

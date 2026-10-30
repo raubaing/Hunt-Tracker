@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { fade } from "svelte/transition";
   import { dur } from "../lib/motion";
+  import { updates, checkForUpdates, installUpdate } from "../lib/updates.svelte";
   import type { Preferences, Shortcuts } from "../lib/types";
   import { getSettings, setShortcuts, pauseShortcuts, setPreferences, exportCsv, dataFolderPath, openDataFolder, onPreferencesChanged } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
@@ -128,6 +129,7 @@
 
   onMount(() => {
     load();
+    if (!updates.current) checkForUpdates(true);
     dataFolderPath().then((p) => (folder = p)).catch(() => {});
     // Le cadenas du widget modifie aussi les préférences : on reste synchronisé
     const off = onPreferencesChanged(async () => {
@@ -234,6 +236,33 @@
     modifiables dans l'onglet Sessions (bouton ✎).
   </p>
 
+  <h2 class="section">Mises à jour</h2>
+  <div class="update-box">
+    <p>
+      Version installée : <strong>{updates.current || "…"}</strong>
+      {#if updates.status === "uptodate"}<span class="ok">· à jour</span>{/if}
+    </p>
+    {#if updates.status === "available"}
+      <p class="new">Nouvelle version disponible : <strong>{updates.version}</strong></p>
+      {#if updates.notes}<pre class="notes">{updates.notes}</pre>{/if}
+      <button class="primary-btn" onclick={installUpdate}>Installer et redémarrer</button>
+    {:else if updates.status === "downloading" || updates.status === "installing"}
+      <p>{updates.status === "downloading" ? "Téléchargement…" : "Installation… l'appli va redémarrer."}</p>
+      <div class="bar"><div style:width="{Math.round(updates.progress * 100)}%"></div></div>
+    {:else}
+      <button onclick={() => checkForUpdates(false)} disabled={updates.status === "checking"}>
+        {updates.status === "checking" ? "Recherche…" : "Vérifier les mises à jour"}
+      </button>
+      {#if updates.status === "error"}
+        <p class="err">Impossible de vérifier : {updates.error}</p>
+      {/if}
+    {/if}
+    <p class="help">
+      L'appli vérifie toute seule au lancement. Les mises à jour s'installent sans toucher à tes sessions ni à
+      tes réglages.
+    </p>
+  </div>
+
   <h2 class="section">Données</h2>
   <div class="data-actions">
     <button onclick={doExport} disabled={exporting}>{exporting ? "Export…" : "Exporter en CSV"}</button>
@@ -279,6 +308,19 @@
   .footer button { padding: 6px 12px; }
   .saved { color: #7fbf7f; font-size: 13px; }
   .section { margin-top: 28px; }
+  .update-box p { margin: 6px 0; font-size: 14px; }
+  .update-box button { padding: 6px 12px; margin-top: 4px; }
+  .update-box .ok { color: #8fc98f; }
+  .update-box .new strong { color: var(--accent); }
+  .update-box .err { color: #d98a8a; font-size: 13px; word-break: break-word; }
+  .notes {
+    white-space: pre-wrap; font: inherit; font-size: 13px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+    max-height: 140px; overflow-y: auto; margin: 6px 0;
+  }
+  .primary-btn { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .bar { height: 6px; background: var(--panel); border-radius: 3px; overflow: hidden; max-width: 320px; }
+  .bar div { height: 100%; background: var(--accent); transition: width 200ms ease; }
   .data-actions { display: flex; gap: 8px; margin-top: 8px; }
   .data-actions button { padding: 6px 12px; }
   code { font-family: Consolas, monospace; font-size: 12px; color: var(--text); word-break: break-all; }

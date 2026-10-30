@@ -49,6 +49,18 @@
           "French"
         ]
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcwRDgzRTMyN0MwMTg3MkMKUldRc2h3RjhNajdZY05mNjU5ZGRmT1RKZmlxdlN5eWlzZVI0UmdhTHJUVjRxa3pqZjB6NytrMnAK",
+      "endpoints": [
+        "https://github.com/raubaing/Hunt-Tracker/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

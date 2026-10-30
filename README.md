@@ -46,13 +46,24 @@ npm run tauri build    # produit l'installeur dans src-tauri/target/release/bund
 
 ## Compiler via GitHub (sans rien installer)
 
-- Chaque push sur `main` compile l'appli : onglet **Actions** > dernier run > **Artifacts** >
-  `HuntTracker-windows` (contient l'installeur `*-setup.exe` et l'exe portable `hunt-tracker.exe`).
-- Un tag `v0.1.0` crée en plus une **Release** (brouillon) avec l'installeur, à publier pour la partager.
+- **Build de test** (workflow « Build ») : à chaque push sur `main`. Onglet **Actions** > dernier run >
+  **Artifacts** > `HuntTracker-windows` (installeur `*-setup.exe` et exe portable).
+- **Publier une version** (workflow « Release ») : mettre à jour le numéro de version (tauri.conf.json,
+  Cargo.toml, package.json), pousser, puis Actions > **Release** > **Run workflow** (avec les nouveautés
+  en option). La Release GitHub `vX.Y.Z` est créée avec l'installeur signé et `latest.json`.
+
+## Mises à jour automatiques
+
+- Au lancement (puis toutes les 6 h), l'appli lit
+  `https://github.com/raubaing/Hunt-Tracker/releases/latest/download/latest.json`. Si une version plus
+  récente existe : pastille **MAJ** dans le widget, installation depuis Options > Mises à jour.
+- Le dépôt doit être **public** pour que l'appli puisse lire les Releases.
+- Les mises à jour sont signées : clé publique dans `tauri.conf.json`, clé privée et mot de passe dans les
+  secrets GitHub `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  (jamais dans le dépôt). Sans ces secrets, les builds échouent.
 
 ## Idées pour la suite
 
-- Icône dans la barre des tâches système (systray), verrouillage et opacité du widget
+- Opacité du widget et clic traversant, mode ultra-compact
 - Lancement au démarrage de Windows
-- Mises à jour automatiques (plugin updater de Tauri)
 - Export / import de sessions (JSON, CSV)

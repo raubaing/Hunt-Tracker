@@ -18,6 +18,8 @@ serde_json = "1"
 tauri-plugin-global-shortcut = "2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [dev-dependencies]
 # Runtime simulé de Tauri pour les tests automatiques (cargo test)

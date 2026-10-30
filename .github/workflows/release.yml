@@ -1,0 +1,47 @@
+# Publie une version : onglet Actions > « Release » > « Run workflow ».
+# - Le numéro vient de src-tauri/tauri.conf.json (ex. 0.3.0 → tag v0.3.0)
+# - Crée la Release GitHub publique avec l'installeur signé et latest.json :
+#   les applis déjà installées proposent alors la mise à jour au lancement.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Nouveautés de cette version (affichées dans l'appli)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "Hunt Tracker v__VERSION__"
+          releaseBody: ${{ inputs.notes != '' && inputs.notes || 'Télécharge le fichier *-setup.exe ci-dessous pour installer. Si Hunt Tracker est déjà installé, la mise à jour est proposée automatiquement au lancement.' }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

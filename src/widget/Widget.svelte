@@ -22,6 +22,7 @@
   } from "../lib/storage";
   import { detailsOf } from "../lib/hunt";
   import { isStale } from "../lib/sessions";
+  import { updates, checkForUpdates } from "../lib/updates.svelte";
   import GameDetailsEditor from "../lib/GameDetailsEditor.svelte";
   import { sessionTotals, kda } from "../lib/stats";
   import { dur, sleep } from "../lib/motion";
@@ -300,6 +301,12 @@
 
   const toggle = () => (expanded ? collapse() : expand());
 
+  /** Pastille « MAJ » : ouvre le panneau sur l'onglet Options */
+  async function showUpdate() {
+    tab = "options";
+    if (!expanded) await expand();
+  }
+
   // Ferme la fenêtre : l'appli s'arrête
   async function quit() {
     // Enregistre tout de suite un déplacement récent avant de fermer
@@ -386,6 +393,9 @@
     refresh();
     const clock = setInterval(() => (now = new Date()), 60_000);
     loadPreferences();
+    // Vérifie les mises à jour peu après le lancement, puis toutes les 6 h
+    const updateTimer = setTimeout(() => checkForUpdates(true), 5000);
+    const updateInterval = setInterval(() => checkForUpdates(true), 6 * 3600 * 1000);
     const offs = [
       onActiveSessionChanged(refresh),
       onPreferencesChanged(loadPreferences),
@@ -396,6 +406,8 @@
       clearTimeout(saveTimer);
       clearTimeout(drawerTimer);
       clearInterval(clock);
+      clearTimeout(updateTimer);
+      clearInterval(updateInterval);
       offs.forEach((p) => p.then((f) => f()));
     };
   });
@@ -436,6 +448,11 @@
           >
         {/if}
         <div class="win">
+          {#if updates.status === "available" || updates.status === "downloading" || updates.status === "installing"}
+            <button class="update" title="Mise à jour {updates.version} disponible : clique pour l'installer" onclick={showUpdate}>
+              MAJ
+            </button>
+          {/if}
           <button
             class="lock"
             class:locked={prefs.locked}
@@ -560,6 +577,11 @@
   .new { padding: 1px 8px; font-size: 12px; margin-right: auto; }
   .win { display: flex; gap: 4px; flex-shrink: 0; }
   .win button { padding: 0 6px; font-size: 12px; }
+  .update {
+    font-size: 10px !important; font-weight: 700; letter-spacing: 0.04em;
+    color: #fff; background: var(--accent); border-color: var(--accent);
+    animation: pulse-border 1.6s ease-in-out 3;
+  }
   .lock { display: inline-flex; align-items: center; color: var(--muted); }
   .lock.locked { color: var(--accent); border-color: var(--accent); }
   .toggle { transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 120ms; }
