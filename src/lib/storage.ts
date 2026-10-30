@@ -41,6 +41,9 @@ export const setShortcuts = (shortcuts: Shortcuts) => invoke<void>("set_shortcut
 export const setPreferences = (preferences: Preferences) => invoke<void>("set_preferences", { preferences });
 /** Exporte toutes les games en CSV (boîte « Enregistrer sous ») ; renvoie le chemin, ou null si annulé */
 export const exportCsv = () => invoke<string | null>("export_csv");
+export const dataFolderPath = () => invoke<string>("data_folder_path");
+/** Ouvre le dossier des données dans l'Explorateur */
+export const openDataFolder = () => invoke<void>("open_data_folder");
 /** Mémorise la taille du panneau déplié (pixels logiques) */
 export const savePanelSize = (w: number, h: number) =>
   invoke<void>("save_panel_size", { w: Math.round(w), h: Math.round(h) });

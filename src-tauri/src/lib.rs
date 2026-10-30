@@ -895,6 +895,31 @@ async fn export_csv(app: AppHandle) -> Result<Option<String>, String> {
     Ok(Some(path.display().to_string()))
 }
 
+// ---------- Dossier des données ----------
+
+/// Chemin du dossier des données (affiché dans les Options)
+#[tauri::command]
+fn data_folder_path(app: AppHandle) -> Result<String, String> {
+    Ok(data_dir(&app)?.display().to_string())
+}
+
+/// Ouvre le dossier des données dans l'Explorateur de fichiers
+#[tauri::command]
+fn open_data_folder(app: AppHandle) -> Result<(), String> {
+    let dir = data_dir(&app)?;
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let program = "xdg-open";
+    std::process::Command::new(program)
+        .arg(&dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Impossible d'ouvrir {} : {e}", dir.display()))
+}
+
 // ---------- Icône dans la barre des tâches système (zone de notification) ----------
 
 fn toggle_widget<R: Runtime>(app: &AppHandle<R>) {
@@ -995,7 +1020,9 @@ pub fn run() {
             pause_shortcuts,
             save_widget_position,
             save_panel_size,
-            export_csv
+            export_csv,
+            data_folder_path,
+            open_data_folder
         ])
         .run(tauri::generate_context!())
         .expect("erreur au lancement de Hunt Tracker");

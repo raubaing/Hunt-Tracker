@@ -4,7 +4,7 @@
   import { fade } from "svelte/transition";
   import { dur } from "../lib/motion";
   import type { Preferences, Shortcuts } from "../lib/types";
-  import { getSettings, setShortcuts, pauseShortcuts, setPreferences, exportCsv } from "../lib/storage";
+  import { getSettings, setShortcuts, pauseShortcuts, setPreferences, exportCsv, dataFolderPath, openDataFolder, onPreferencesChanged } from "../lib/storage";
   import { eventToAccelerator, formatAccelerator } from "../lib/shortcuts";
 
   const DEFAULTS: Shortcuts = { kill: "F8", assist: "F9", death: "F10", validate: "F11", toggle: "F7" };
@@ -97,6 +97,16 @@
 
   // ---------- Données ----------
   let dataMessage = $state<string | null>(null);
+  let folder = $state("");
+
+  async function openFolder() {
+    error = null;
+    try {
+      await openDataFolder();
+    } catch (e) {
+      error = String(e);
+    }
+  }
   let exporting = $state(false);
 
   async function doExport() {
@@ -118,7 +128,15 @@
 
   onMount(() => {
     load();
+    dataFolderPath().then((p) => (folder = p)).catch(() => {});
+    // Le cadenas du widget modifie aussi les préférences : on reste synchronisé
+    const off = onPreferencesChanged(async () => {
+      try {
+        preferences = (await getSettings()).preferences;
+      } catch {}
+    });
     return () => {
+      off.then((f) => f());
       if (capturing) pauseShortcuts(false).catch(() => {});
     };
   });
@@ -219,6 +237,7 @@
   <h2 class="section">Données</h2>
   <div class="data-actions">
     <button onclick={doExport} disabled={exporting}>{exporting ? "Export…" : "Exporter en CSV"}</button>
+    <button onclick={openFolder}>Ouvrir le dossier des données</button>
   </div>
   {#if dataMessage}
     <p class="data-message" transition:fade={{ duration: dur(200) }}>✓ {dataMessage}</p>
@@ -226,6 +245,12 @@
   <p class="help">
     Une ligne par game (toutes les sessions), prête à ouvrir dans Excel : séparateur « ; » et virgule décimale.
   </p>
+  {#if folder}
+    <p class="help">
+      Tes sessions sont enregistrées dans <code>{folder}</code> (un fichier par session). Copie ce dossier pour
+      faire une sauvegarde.
+    </p>
+  {/if}
 </div>
 </div>
 
@@ -256,6 +281,7 @@
   .section { margin-top: 28px; }
   .data-actions { display: flex; gap: 8px; margin-top: 8px; }
   .data-actions button { padding: 6px 12px; }
+  code { font-family: Consolas, monospace; font-size: 12px; color: var(--text); word-break: break-all; }
   .data-message { color: #8fc98f; font-size: 13px; word-break: break-all; margin: 8px 0 0; }
   .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .check input { accent-color: var(--accent); width: 16px; height: 16px; }
